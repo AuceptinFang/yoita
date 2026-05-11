@@ -32,17 +32,37 @@ mod tests {
     use crate::{config::ModSource, error::TomlConfigError};
 
     #[test]
-    fn parses_compact_mod_table() {
+    fn parses_cargo_like_steam_defaults() {
         let input = r#"
             [mods]
-            wanddbg = { version = "1.0.0", url = "https://example.invalid/noita/mods/example-custom-mod.zip" }
-            edit-always = { workshop_id = "edit-always" }
+            edit-always = {}
+            wanddbg = "1.0.0"
         "#;
 
         let config = crate::toml::parse_config(input).unwrap();
         assert_eq!(config.mods.len(), 2);
+        assert_eq!(config.mods[0].name, "edit-always");
+        assert!(matches!(
+            &config.mods[0].source,
+            ModSource::Steam { workshop_id } if workshop_id == "edit-always"
+        ));
+        assert_eq!(config.mods[1].version.as_deref(), Some("1.0.0"));
+        assert!(matches!(
+            &config.mods[1].source,
+            ModSource::Steam { workshop_id } if workshop_id == "wanddbg"
+        ));
+    }
+
+    #[test]
+    fn parses_custom_mod_when_url_is_explicit() {
+        let input = r#"
+            [mods]
+            noita-utility-box = { kind = "custom", url = "https://example.invalid/noita/mods/example-custom-mod.zip" }
+        "#;
+
+        let config = crate::toml::parse_config(input).unwrap();
+        assert_eq!(config.mods.len(), 1);
         assert!(matches!(config.mods[0].source, ModSource::Custom { .. }));
-        assert!(matches!(config.mods[1].source, ModSource::Steam { .. }));
     }
 
     #[test]
@@ -66,7 +86,7 @@ mod tests {
     fn rejects_invalid_custom_url() {
         let input = r#"
             [mods]
-            wanddbg = { version = "1.0.0", url = "not a url" }
+            wanddbg = { kind = "custom", url = "not a url" }
         "#;
 
         let error = crate::toml::parse_config(input).unwrap_err();

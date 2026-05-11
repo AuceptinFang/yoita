@@ -4,8 +4,8 @@ staging_dir = ".yoita/staging"
 mount_dir = "./mods"
 
 [steam]
-download_endpoint = "https://example.invalid/workshop/download"
+download_endpoint = "https://your-downloader.example/workshop/download"
 
 [mods]
-example-steam-mod = { version = "latest", enabled = true, workshop_id = "1234567890" }
-example-custom-mod = { url = "https://example.invalid/noita/mods/example-custom-mod.zip" }
+edit-always = {}
+wanddbg = { workshop_id = "3454128340" }

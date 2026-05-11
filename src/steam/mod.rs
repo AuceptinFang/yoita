@@ -1,18 +1,16 @@
-use reqwest::{Client, Url};
+use reqwest::Url;
 
 use crate::{config::SteamConfig, error::Result};
 
 #[derive(Debug, Clone)]
 pub struct SteamClient {
-    pub http: Client,
     download_endpoint: Url,
     api_key: Option<String>,
 }
 
 impl SteamClient {
-    pub fn new(http: Client, config: &SteamConfig) -> Result<Self> {
+    pub fn new(config: &SteamConfig) -> Result<Self> {
         Ok(Self {
-            http,
             download_endpoint: config.download_endpoint.clone(),
             api_key: config.api_key.clone(),
         })

@@ -173,7 +173,7 @@ fn build_compact_mod(name: String, value: toml::Value) -> Result<ModConfig, Conf
     let field = format!("mods.{name}");
 
     match value {
-        toml::Value::String(raw_source) => build_shorthand_mod(name, raw_source),
+        toml::Value::String(version) => build_version_shorthand_mod(name, version),
         toml::Value::Table(_) => {
             let spec: RawModSpec = value.try_into().map_err(|error: toml::de::Error| {
                 ConfigValidationError::new(&field, error.message())
@@ -191,39 +191,26 @@ fn build_compact_mod(name: String, value: toml::Value) -> Result<ModConfig, Conf
     }
 }
 
-fn build_shorthand_mod(
+fn build_version_shorthand_mod(
     name: String,
-    raw_source: String,
+    version: String,
 ) -> Result<ModConfig, ConfigValidationError> {
     let field = format!("mods.{name}");
-    let raw_source = raw_source.trim();
+    let version = version.trim();
 
-    if raw_source.is_empty() {
+    if version.is_empty() {
         return Err(ConfigValidationError::new(
             field,
-            "cannot use an empty shorthand source",
+            "cannot use an empty shorthand version",
         ));
     }
-
-    let source = match Url::parse(raw_source) {
-        Ok(url) => ModSource::Custom { url },
-        Err(error) if looks_like_url(raw_source) => {
-            return Err(ConfigValidationError::new(
-                field,
-                format!("contains an invalid url: {error}"),
-            ));
-        }
-        Err(_) => ModSource::Steam {
-            workshop_id: raw_source.to_owned(),
-        },
-    };
 
     build_mod_config(
         name,
         RawModSpec {
-            version: None,
+            version: Some(version.to_owned()),
             enabled: default_enabled(),
-            source: Some(source),
+            source: None,
             url: None,
             workshop_id: None,
             kind: None,
@@ -233,7 +220,14 @@ fn build_shorthand_mod(
 
 fn build_mod_config(name: String, spec: RawModSpec) -> Result<ModConfig, ConfigValidationError> {
     let field = format!("mods.{name}");
-    let source = resolve_source(&field, spec.source, spec.kind, spec.url, spec.workshop_id)?;
+    let source = resolve_source(
+        &field,
+        &name,
+        spec.source,
+        spec.kind,
+        spec.url,
+        spec.workshop_id,
+    )?;
 
     Ok(ModConfig {
         name,
@@ -245,6 +239,7 @@ fn build_mod_config(name: String, spec: RawModSpec) -> Result<ModConfig, ConfigV
 
 fn resolve_source(
     field: &str,
+    default_steam_id: &str,
     source: Option<ModSource>,
     kind: Option<String>,
     url: Option<Url>,
@@ -258,7 +253,7 @@ fn resolve_source(
     }
 
     if let Some(source) = source {
-        return normalize_source(field, source);
+        return normalize_source(field, default_steam_id, source);
     }
 
     let workshop_id = normalize_workshop_id(field, workshop_id)?;
@@ -277,10 +272,9 @@ fn resolve_source(
         },
         Some("steam") => match (url, workshop_id) {
             (None, Some(workshop_id)) => Ok(ModSource::Steam { workshop_id }),
-            (None, None) => Err(ConfigValidationError::new(
-                field,
-                "with `kind = \"steam\"` must define `workshop_id`",
-            )),
+            (None, None) => Ok(ModSource::Steam {
+                workshop_id: default_steam_id.to_owned(),
+            }),
             (Some(_), _) => Err(ConfigValidationError::new(
                 field,
                 "with `kind = \"steam\"` cannot also define `url`",
@@ -297,20 +291,22 @@ fn resolve_source(
                 field,
                 "must not define both `url` and `workshop_id` without an explicit `kind`",
             )),
-            (None, None) => Err(ConfigValidationError::new(
-                field,
-                "must define either `url` or `workshop_id`",
-            )),
+            (None, None) => Ok(ModSource::Steam {
+                workshop_id: default_steam_id.to_owned(),
+            }),
         },
     }
 }
 
-fn normalize_source(field: &str, source: ModSource) -> Result<ModSource, ConfigValidationError> {
+fn normalize_source(
+    field: &str,
+    default_steam_id: &str,
+    source: ModSource,
+) -> Result<ModSource, ConfigValidationError> {
     match source {
         ModSource::Steam { workshop_id } => Ok(ModSource::Steam {
-            workshop_id: normalize_workshop_id(field, Some(workshop_id))?.ok_or_else(|| {
-                ConfigValidationError::new(field, "must define a non-empty `workshop_id`")
-            })?,
+            workshop_id: normalize_workshop_id(field, Some(workshop_id))?
+                .unwrap_or_else(|| default_steam_id.to_owned()),
         }),
         ModSource::Custom { url } => Ok(ModSource::Custom { url }),
     }
@@ -334,10 +330,6 @@ fn normalize_workshop_id(
         }
         None => Ok(None),
     }
-}
-
-fn looks_like_url(value: &str) -> bool {
-    value.contains("://")
 }
 
 fn toml_value_kind(value: &toml::Value) -> &'static str {
