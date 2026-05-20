@@ -4,7 +4,12 @@ staging_dir = ".yoita/staging"
 mount_dir = "./mods"
 
 [steam]
-download_endpoint = "https://your-downloader.example/workshop/download"
+backend = "steamcmd"
+steamcmd_path = "steamcmd"
+force_install_dir = ".yoita/steamcmd"
+app_id = 881100
+timeout_secs = 300
+login = "anonymous"
 
 [mods]
 edit-always = {}

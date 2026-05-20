@@ -29,7 +29,10 @@ fn parse_config_with_origin(
 
 #[cfg(test)]
 mod tests {
-    use crate::{config::ModSource, error::TomlConfigError};
+    use crate::{
+        config::{ModSource, SteamLoginConfig},
+        error::TomlConfigError,
+    };
 
     #[test]
     fn parses_cargo_like_steam_defaults() {
@@ -66,6 +69,28 @@ mod tests {
     }
 
     #[test]
+    fn parses_steamcmd_config_defaults() {
+        let input = r#"
+            [steam]
+
+            [mods]
+            edit-always = {}
+        "#;
+
+        let config = crate::toml::parse_config(input).unwrap();
+        let steam = config.steam.unwrap();
+
+        assert_eq!(steam.app_id, 881100);
+        assert_eq!(steam.timeout_secs, 300);
+        assert_eq!(steam.steamcmd_path, std::path::PathBuf::from("steamcmd"));
+        assert_eq!(
+            steam.force_install_dir,
+            std::path::PathBuf::from(".yoita/steamcmd")
+        );
+        assert_eq!(steam.login, SteamLoginConfig::Anonymous);
+    }
+
+    #[test]
     fn parses_legacy_mod_array() {
         let input = r#"
             [[mods]]
@@ -92,6 +117,22 @@ mod tests {
         let error = crate::toml::parse_config(input).unwrap_err();
         assert!(matches!(error, TomlConfigError::Validation { .. }));
         assert!(error.to_string().contains("mods.wanddbg"));
+    }
+
+    #[test]
+    fn rejects_account_login_without_password_env() {
+        let input = r#"
+            [steam]
+            login = "account"
+            username = "alice"
+
+            [mods]
+            wanddbg = {}
+        "#;
+
+        let error = crate::toml::parse_config(input).unwrap_err();
+        assert!(matches!(error, TomlConfigError::Validation { .. }));
+        assert!(error.to_string().contains("steam.password_env"));
     }
 
     #[test]

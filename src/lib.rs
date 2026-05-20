@@ -5,7 +5,11 @@ pub mod state;
 pub mod steam;
 pub mod toml;
 
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, anyhow};
 use reqwest::{Client, Url};
@@ -15,14 +19,14 @@ use crate::{
     error::Result,
     file::WorkspaceLayout,
     state::{ManagedModState, SyncState},
-    steam::SteamClient,
+    steam::{SteamCmdConfig, SteamContext, WorkshopContentRequest, WorkshopItemId, WorkshopItemRef},
 };
 
 #[derive(Debug, Clone)]
 pub struct Yoita {
     http: Client,
     layout: WorkspaceLayout,
-    steam: Option<SteamClient>,
+    steam: Option<SteamContext>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +61,15 @@ impl Yoita {
             .build()
             .context("failed to build HTTP client")?;
 
-        let steam = config.steam.as_ref().map(SteamClient::new).transpose()?;
+        let steam = config
+            .steam
+            .as_ref()
+            .map(|steam| {
+                let steamcmd = SteamCmdConfig::try_from(steam)
+                    .context("failed to build steamcmd runtime config")?;
+                Ok::<SteamContext, anyhow::Error>(SteamContext::unsupported(steamcmd))
+            })
+            .transpose()?;
 
         Ok(Self {
             http,
@@ -71,15 +83,7 @@ impl Yoita {
     }
 
     pub fn enabled_mods<'a>(&self, config: &'a YoitaConfig) -> Result<Vec<&'a ModConfig>> {
-        config
-            .mods
-            .iter()
-            .filter(|entry| entry.enabled)
-            .map(|entry| {
-                self.download_url(entry)?;
-                Ok(entry)
-            })
-            .collect()
+        Ok(config.mods.iter().filter(|entry| entry.enabled).collect())
     }
 
     pub async fn sync(&self, config: &YoitaConfig) -> Result<SyncReport> {
@@ -131,34 +135,39 @@ impl Yoita {
         })
     }
 
-    pub fn download_url(&self, entry: &ModConfig) -> Result<Url> {
+    async fn resolve_mod(&self, entry: &ModConfig) -> Result<ResolvedMod> {
         match &entry.source {
-            ModSource::Steam { workshop_id } => {
-                let steam = self.steam.as_ref().ok_or_else(|| {
-                    anyhow!(
-                        "mod `{}` uses steam source but `[steam]` is missing",
-                        entry.name
-                    )
-                })?;
-
-                Ok(steam.download_url(workshop_id).with_context(|| {
-                    format!(
-                        "failed to resolve steam download url for mod `{}`",
-                        entry.name
-                    )
-                })?)
-            }
-            ModSource::Custom { url } => Ok(url.clone()),
+            ModSource::Steam { workshop_id } => self.resolve_steam_mod(entry, workshop_id).await,
+            ModSource::Custom { url } => self.download_custom_mod(entry, url).await,
         }
     }
 
-    async fn resolve_mod(&self, entry: &ModConfig) -> Result<ResolvedMod> {
-        self.download_mod(entry).await
+    async fn resolve_steam_mod(&self, entry: &ModConfig, workshop_id: &str) -> Result<ResolvedMod> {
+        let steam = self.steam.as_ref().ok_or_else(|| {
+            anyhow!(
+                "mod `{}` uses steam source but `[steam]` is missing",
+                entry.name
+            )
+        })?;
+        let workshop_id = workshop_id.parse::<WorkshopItemId>().with_context(|| {
+            format!("invalid steam workshop id for mod `{}`", entry.name)
+        })?;
+        let content = steam
+            .content()
+            .ensure_content(WorkshopContentRequest {
+                item: WorkshopItemRef::new(steam.app_id(), workshop_id),
+            })
+            .await
+            .with_context(|| format!("failed to resolve steam content for mod `{}`", entry.name))?;
+
+        Ok(ResolvedMod {
+            bytes: path_size(&content.source_path)?,
+            source_path: content.source_path,
+        })
     }
 
-    async fn download_mod(&self, entry: &ModConfig) -> Result<ResolvedMod> {
-        let download_url = self.download_url(entry)?;
-        let archive_path = self.layout.archive_path(entry, &download_url);
+    async fn download_custom_mod(&self, entry: &ModConfig, download_url: &Url) -> Result<ResolvedMod> {
+        let archive_path = self.layout.custom_archive_path(entry, download_url);
 
         if let Some(parent) = archive_path.parent() {
             fs::create_dir_all(parent).with_context(|| {
@@ -172,7 +181,7 @@ impl Yoita {
 
         let response = self
             .http
-            .get(download_url)
+            .get(download_url.clone())
             .send()
             .await
             .with_context(|| format!("failed to request mod `{}`", entry.name))?
@@ -224,6 +233,25 @@ impl Yoita {
     }
 }
 
+fn path_size(path: &Path) -> Result<u64> {
+    let metadata = fs::metadata(path)
+        .with_context(|| format!("failed to read metadata for `{}`", path.display()))?;
+
+    if metadata.is_file() {
+        return Ok(metadata.len());
+    }
+
+    let mut total = 0;
+    for entry in fs::read_dir(path)
+        .with_context(|| format!("failed to read directory `{}`", path.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to read entry in `{}`", path.display()))?;
+        total += path_size(&entry.path())?;
+    }
+
+    Ok(total)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -235,7 +263,7 @@ mod tests {
     use reqwest::{Client, Url};
 
     use crate::{
-        config::{ModConfig, ModSource, RuntimeConfig, SteamConfig, YoitaConfig},
+        config::{ModConfig, ModSource, SteamConfig, YoitaConfig},
         file::WorkspaceLayout,
         state::{ManagedModState, SyncState},
     };
@@ -243,58 +271,29 @@ mod tests {
     use super::Yoita;
 
     #[test]
-    fn download_url_builds_workshop_query() {
-        let config = YoitaConfig {
-            config: RuntimeConfig::default(),
-            steam: Some(SteamConfig {
-                download_endpoint: Url::parse("https://example.invalid/workshop/download").unwrap(),
-                api_key: Some("secret".to_owned()),
-            }),
-            mods: vec![ModConfig {
-                name: "reference-steam-mod".to_owned(),
-                version: Some("latest".to_owned()),
-                enabled: true,
-                source: ModSource::Steam {
-                    workshop_id: "1234567890".to_owned(),
-                },
-            }],
-        };
-
-        let app = Yoita::from_config(&config).unwrap();
-        let url = app.download_url(&config.mods[0]).unwrap();
-
-        assert_eq!(
-            url.as_str(),
-            "https://example.invalid/workshop/download?id=1234567890&key=secret"
-        );
-    }
-
-    #[test]
-    fn archive_path_is_stable_for_steam_mod() {
+    fn custom_archive_path_is_stable() {
         let layout = WorkspaceLayout {
             cache_dir: std::path::PathBuf::from("/tmp/yoita-cache"),
             staging_dir: std::path::PathBuf::from("/tmp/yoita-staging"),
             mount_dir: std::path::PathBuf::from("/tmp/yoita-mount"),
         };
         let mod_config = ModConfig {
-            name: "Reference Steam Mod".to_owned(),
+            name: "Reference Custom Mod".to_owned(),
             version: Some("1.0.0".to_owned()),
             enabled: true,
-            source: ModSource::Steam {
-                workshop_id: "1234567890".to_owned(),
+            source: ModSource::Custom {
+                url: Url::parse("https://example.invalid/mods/reference-custom-mod.zip").unwrap(),
             },
         };
 
-        let path = layout.archive_path(
+        let path = layout.custom_archive_path(
             &mod_config,
-            &Url::parse("https://example.invalid/workshop/download").unwrap(),
+            &Url::parse("https://example.invalid/mods/reference-custom-mod.zip").unwrap(),
         );
 
         assert_eq!(
             path,
-            std::path::PathBuf::from(
-                "/tmp/yoita-cache/steam/1234567890/reference-steam-mod-1.0.0.zip"
-            )
+            std::path::PathBuf::from("/tmp/yoita-cache/custom/reference-custom-mod-1.0.0.zip")
         );
     }
 
@@ -395,5 +394,37 @@ mod tests {
         assert!(!stale_mount.exists());
 
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn steam_source_reports_unimplemented_provider() {
+        let config = YoitaConfig {
+            config: Default::default(),
+            steam: Some(SteamConfig {
+                backend: crate::config::SteamBackend::SteamCmd,
+                steamcmd_path: "steamcmd".into(),
+                force_install_dir: ".yoita/steamcmd".into(),
+                app_id: 881100,
+                timeout_secs: 300,
+                login: crate::config::SteamLoginConfig::Anonymous,
+                username: None,
+                password_env: None,
+            }),
+            mods: vec![ModConfig {
+                name: "wanddbg".to_owned(),
+                version: None,
+                enabled: true,
+                source: ModSource::Steam {
+                    workshop_id: "3454128340".to_owned(),
+                },
+            }],
+        };
+
+        let app = Yoita::from_config(&config).unwrap();
+        let error = app.resolve_mod(&config.mods[0]).await.unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("failed to resolve steam content for mod `wanddbg`"));
     }
 }

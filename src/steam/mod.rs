@@ -1,36 +1,24 @@
-use reqwest::Url;
+mod content;
+mod provider;
+mod service;
+mod steamcmd;
+mod transport;
+mod types;
 
-use crate::{config::SteamConfig, error::Result};
+pub use content::content_kind_for_path;
+pub use provider::{
+    UnsupportedWorkshopContentProvider, UnsupportedWorkshopMetadataProvider,
+    WorkshopContentProvider, WorkshopMetadataProvider,
+};
+pub use service::{SteamContext, SteamServices};
+pub use steamcmd::{SteamCmdConfig, SteamCmdScript, SteamLoginMode};
+pub use transport::{
+    CommandOutput, CommandRequest, CommandRunner, HttpMethod, HttpRequest, HttpRequester,
+    HttpResponse, SteamFuture,
+};
+pub use types::{
+    SteamAppId, WorkshopContentKind, WorkshopContentRequest, WorkshopFileType, WorkshopItemContent,
+    WorkshopItemDetails, WorkshopItemId, WorkshopItemRef, WorkshopMetadataRequest,
+};
 
-#[derive(Debug, Clone)]
-pub struct SteamClient {
-    download_endpoint: Url,
-    api_key: Option<String>,
-}
-
-impl SteamClient {
-    pub fn new(config: &SteamConfig) -> Result<Self> {
-        Ok(Self {
-            download_endpoint: config.download_endpoint.clone(),
-            api_key: config.api_key.clone(),
-        })
-    }
-
-    pub fn download_url(&self, workshop_id: &str) -> Result<Url> {
-        if workshop_id.trim().is_empty() {
-            return Err(anyhow::anyhow!("steam workshop id cannot be empty").into());
-        }
-
-        let mut download_url = self.download_endpoint.clone();
-        {
-            let mut query = download_url.query_pairs_mut();
-            query.append_pair("id", workshop_id);
-
-            if let Some(api_key) = &self.api_key {
-                query.append_pair("key", api_key);
-            }
-        }
-
-        Ok(download_url)
-    }
-}
+pub type SteamCmdRunResult = CommandOutput;

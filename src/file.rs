@@ -7,7 +7,7 @@ use anyhow::Context;
 use reqwest::Url;
 
 use crate::{
-    config::{ModConfig, ModSource, RuntimeConfig},
+    config::{ModConfig, RuntimeConfig},
     error::Result,
 };
 
@@ -50,22 +50,14 @@ impl WorkspaceLayout {
             .unwrap_or_else(|| PathBuf::from("state.toml"))
     }
 
-    pub fn archive_path(&self, entry: &ModConfig, download_url: &Url) -> PathBuf {
+    pub fn custom_archive_path(&self, entry: &ModConfig, download_url: &Url) -> PathBuf {
         let extension = infer_extension(download_url);
         let version = sanitize_fragment(entry.version.as_deref().unwrap_or("latest"), "latest");
         let name = sanitize_fragment(&entry.name, "mod");
 
-        match &entry.source {
-            ModSource::Steam { workshop_id } => self
-                .cache_dir
-                .join("steam")
-                .join(sanitize_fragment(workshop_id, "workshop"))
-                .join(format!("{name}-{version}.{extension}")),
-            ModSource::Custom { .. } => self
-                .cache_dir
-                .join("custom")
-                .join(format!("{name}-{version}.{extension}")),
-        }
+        self.cache_dir
+            .join("custom")
+            .join(format!("{name}-{version}.{extension}"))
     }
 
     pub fn mount_path(&self, entry: &ModConfig, source_path: &Path) -> PathBuf {

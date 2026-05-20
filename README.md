@@ -35,3 +35,7 @@ custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }
 - 不删除 Steam 默认目录里的缓存
 - 不退订 Workshop item
 - 不删除不属于 yoita 状态文件记录的 `mount_dir` 内容
+
+## docs
+
+- SteamCMD backend 接口文档：`docs/steamcmd-backend.md`

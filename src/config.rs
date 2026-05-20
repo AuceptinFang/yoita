@@ -34,10 +34,37 @@ impl Default for RuntimeConfig {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct SteamConfig {
-    #[serde(deserialize_with = "deserialize_url")]
-    pub download_endpoint: Url,
     #[serde(default)]
-    pub api_key: Option<String>,
+    pub backend: SteamBackend,
+    #[serde(default = "default_steamcmd_path")]
+    pub steamcmd_path: PathBuf,
+    #[serde(default = "default_force_install_dir")]
+    pub force_install_dir: PathBuf,
+    #[serde(default = "default_app_id")]
+    pub app_id: u32,
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+    #[serde(default)]
+    pub login: SteamLoginConfig,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password_env: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SteamBackend {
+    #[default]
+    SteamCmd,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SteamLoginConfig {
+    #[default]
+    Anonymous,
+    Account,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,6 +97,22 @@ fn default_staging_dir() -> PathBuf {
 
 fn default_mount_dir() -> PathBuf {
     PathBuf::from("mods")
+}
+
+fn default_steamcmd_path() -> PathBuf {
+    PathBuf::from("steamcmd")
+}
+
+fn default_force_install_dir() -> PathBuf {
+    PathBuf::from(".yoita/steamcmd")
+}
+
+fn default_app_id() -> u32 {
+    881100
+}
+
+fn default_timeout_secs() -> u64 {
+    300
 }
 
 fn default_enabled() -> bool {
@@ -160,6 +203,10 @@ impl TryFrom<RawYoitaConfig> for YoitaConfig {
                 .map(|(name, value)| build_compact_mod(name, value))
                 .collect::<Result<Vec<_>, _>>()?,
         };
+
+        if let Some(steam) = raw.steam.as_ref() {
+            validate_steam_config(steam)?;
+        }
 
         Ok(Self {
             config: raw.config,
@@ -330,6 +377,68 @@ fn normalize_workshop_id(
         }
         None => Ok(None),
     }
+}
+
+fn validate_steam_config(config: &SteamConfig) -> Result<(), ConfigValidationError> {
+    if config.app_id == 0 {
+        return Err(ConfigValidationError::new(
+            "steam.app_id",
+            "must be greater than zero",
+        ));
+    }
+
+    if config.timeout_secs == 0 {
+        return Err(ConfigValidationError::new(
+            "steam.timeout_secs",
+            "must be greater than zero",
+        ));
+    }
+
+    match config.login {
+        SteamLoginConfig::Anonymous => {
+            if config.username.is_some() {
+                return Err(ConfigValidationError::new(
+                    "steam.username",
+                    "must not be set when `login = \"anonymous\"`",
+                ));
+            }
+
+            if config.password_env.is_some() {
+                return Err(ConfigValidationError::new(
+                    "steam.password_env",
+                    "must not be set when `login = \"anonymous\"`",
+                ));
+            }
+        }
+        SteamLoginConfig::Account => {
+            let username = config
+                .username
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let password_env = config
+                .password_env
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+
+            if username.is_none() {
+                return Err(ConfigValidationError::new(
+                    "steam.username",
+                    "is required when `login = \"account\"`",
+                ));
+            }
+
+            if password_env.is_none() {
+                return Err(ConfigValidationError::new(
+                    "steam.password_env",
+                    "is required when `login = \"account\"`",
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn toml_value_kind(value: &toml::Value) -> &'static str {
