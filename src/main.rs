@@ -22,25 +22,31 @@ async fn run() -> Result<()> {
     let config = toml::load_config(&config_path)?;
     let app = Yoita::from_config(&config)?;
     let layout = app.layout();
-    let cached = app.sync(&config).await?;
+    let report = app.sync(&config).await?;
 
     tracing::info!(
         config_path = %config_path,
+        state_path = %report.state_path.display(),
         cache_dir = %layout.cache_dir.display(),
         staging_dir = %layout.staging_dir.display(),
         mount_dir = %layout.mount_dir.display(),
-        mods = cached.len(),
-        "yoita synced mods"
+        synced = report.mods.len(),
+        removed = report.removed_mounts.len(),
+        "yoita sync completed"
     );
 
-    for item in &cached {
+    for item in &report.mods {
         tracing::info!(
             name = %item.name,
+            source = %item.source_path.display(),
+            mount = %item.mount_path.display(),
             bytes = item.bytes,
-            archive = %item.archive_path.display(),
-            download_url = %item.download_url,
-            "cached mod archive"
+            "synced mod"
         );
+    }
+
+    for path in &report.removed_mounts {
+        tracing::info!(mount = %path.display(), "removed stale mount");
     }
 
     Ok(())

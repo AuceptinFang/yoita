@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use reqwest::Url;
@@ -31,7 +34,20 @@ impl WorkspaceLayout {
             })?;
         }
 
+        if let Some(parent) = self.state_path().parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create state directory `{}`", parent.display())
+            })?;
+        }
+
         Ok(())
+    }
+
+    pub fn state_path(&self) -> PathBuf {
+        self.cache_dir
+            .parent()
+            .map(|parent| parent.join("state.toml"))
+            .unwrap_or_else(|| PathBuf::from("state.toml"))
     }
 
     pub fn archive_path(&self, entry: &ModConfig, download_url: &Url) -> PathBuf {
@@ -51,6 +67,81 @@ impl WorkspaceLayout {
                 .join(format!("{name}-{version}.{extension}")),
         }
     }
+
+    pub fn mount_path(&self, entry: &ModConfig, source_path: &Path) -> PathBuf {
+        let name = sanitize_fragment(&entry.name, "mod");
+
+        if source_path.is_dir() {
+            self.mount_dir.join(name)
+        } else {
+            let extension = infer_path_extension(source_path).unwrap_or_else(|| "zip".to_owned());
+            self.mount_dir.join(format!("{name}.{extension}"))
+        }
+    }
+
+    pub fn sync_to_mount(&self, source_path: &Path, mount_path: &Path) -> Result<()> {
+        self.ensure_managed_mount_path(mount_path)?;
+
+        if let Some(parent) = mount_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "failed to create mount parent directory `{}`",
+                    parent.display()
+                )
+            })?;
+        }
+
+        if mount_path.exists() {
+            remove_path(mount_path).with_context(|| {
+                format!("failed to replace mount path `{}`", mount_path.display())
+            })?;
+        }
+
+        if source_path.is_dir() {
+            copy_dir_all(source_path, mount_path).with_context(|| {
+                format!(
+                    "failed to sync mounted directory from `{}` to `{}`",
+                    source_path.display(),
+                    mount_path.display()
+                )
+            })?;
+        } else {
+            fs::copy(source_path, mount_path).with_context(|| {
+                format!(
+                    "failed to sync mounted file from `{}` to `{}`",
+                    source_path.display(),
+                    mount_path.display()
+                )
+            })?;
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_mount_path(&self, mount_path: &Path) -> Result<()> {
+        self.ensure_managed_mount_path(mount_path)?;
+
+        if mount_path.exists() {
+            remove_path(mount_path).with_context(|| {
+                format!("failed to remove mount path `{}`", mount_path.display())
+            })?;
+        }
+
+        Ok(())
+    }
+
+    fn ensure_managed_mount_path(&self, mount_path: &Path) -> Result<()> {
+        if !mount_path.starts_with(&self.mount_dir) {
+            return Err(anyhow::anyhow!(
+                "refusing to manage path `{}` outside mount dir `{}`",
+                mount_path.display(),
+                self.mount_dir.display()
+            )
+            .into());
+        }
+
+        Ok(())
+    }
 }
 
 fn infer_extension(download_url: &Url) -> String {
@@ -62,6 +153,14 @@ fn infer_extension(download_url: &Url) -> String {
         .filter(|ext| !ext.is_empty())
         .map(|ext| sanitize_fragment(ext, "zip"))
         .unwrap_or_else(|| "zip".to_owned())
+}
+
+fn infer_path_extension(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::trim)
+        .filter(|ext| !ext.is_empty())
+        .map(|ext| sanitize_fragment(ext, "zip"))
 }
 
 fn sanitize_fragment(value: &str, fallback: &str) -> String {
@@ -92,4 +191,46 @@ fn sanitize_fragment(value: &str, fallback: &str) -> String {
     } else {
         trimmed
     }
+}
+
+fn copy_dir_all(source: &Path, target: &Path) -> Result<()> {
+    fs::create_dir_all(target)
+        .with_context(|| format!("failed to create directory `{}`", target.display()))?;
+
+    for entry in fs::read_dir(source)
+        .with_context(|| format!("failed to read directory `{}`", source.display()))?
+    {
+        let entry =
+            entry.with_context(|| format!("failed to read entry in `{}`", source.display()))?;
+        let entry_type = entry.file_type().with_context(|| {
+            format!("failed to read file type for `{}`", entry.path().display())
+        })?;
+        let destination = target.join(entry.file_name());
+
+        if entry_type.is_dir() {
+            copy_dir_all(&entry.path(), &destination)?;
+        } else {
+            fs::copy(entry.path(), &destination).with_context(|| {
+                format!(
+                    "failed to copy file `{}` to `{}`",
+                    entry.path().display(),
+                    destination.display()
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn remove_path(path: &Path) -> Result<()> {
+    if path.is_dir() {
+        fs::remove_dir_all(path)
+            .with_context(|| format!("failed to remove directory `{}`", path.display()))?;
+    } else {
+        fs::remove_file(path)
+            .with_context(|| format!("failed to remove file `{}`", path.display()))?;
+    }
+
+    Ok(())
 }
