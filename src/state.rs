@@ -70,7 +70,7 @@ impl SyncState {
 impl ManagedModState {
     pub fn from_mod(entry: &ModConfig, source_path: PathBuf, mount_path: PathBuf) -> Self {
         let (source_kind, source_id) = match &entry.source {
-            ModSource::Steam { workshop_id } => ("steam".to_owned(), workshop_id.clone()),
+            ModSource::Steam { id } => ("steam".to_owned(), id.clone()),
             ModSource::Custom { url } => ("custom".to_owned(), url.as_str().to_owned()),
         };
 
@@ -116,7 +116,7 @@ mod tests {
                     version: None,
                     enabled: true,
                     source: ModSource::Steam {
-                        workshop_id: "edit-always".to_owned(),
+                        id: "edit-always".to_owned(),
                     },
                 },
                 root.join("cache/edit-always.zip"),

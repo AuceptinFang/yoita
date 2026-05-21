@@ -35,11 +35,11 @@ mod tests {
     };
 
     #[test]
-    fn parses_cargo_like_steam_defaults() {
+    fn parses_steam_id_shorthand_and_defaults() {
         let input = r#"
             [mods]
             edit-always = {}
-            wanddbg = "1.0.0"
+            wanddbg = "2572385079"
         "#;
 
         let config = crate::toml::parse_config(input).unwrap();
@@ -47,12 +47,12 @@ mod tests {
         assert_eq!(config.mods[0].name, "edit-always");
         assert!(matches!(
             &config.mods[0].source,
-            ModSource::Steam { workshop_id } if workshop_id == "edit-always"
+            ModSource::Steam { id } if id == "edit-always"
         ));
-        assert_eq!(config.mods[1].version.as_deref(), Some("1.0.0"));
+        assert_eq!(config.mods[1].version, None);
         assert!(matches!(
             &config.mods[1].source,
-            ModSource::Steam { workshop_id } if workshop_id == "wanddbg"
+            ModSource::Steam { id } if id == "2572385079"
         ));
     }
 
@@ -69,7 +69,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_steam_mod_id_alias() {
+    fn parses_steam_mod_id_inline_table() {
         let input = r#"
             [mods]
             wanddbg = { id = "2572385079" }
@@ -79,8 +79,21 @@ mod tests {
         assert_eq!(config.mods.len(), 1);
         assert!(matches!(
             &config.mods[0].source,
-            ModSource::Steam { workshop_id } if workshop_id == "2572385079"
+            ModSource::Steam { id } if id == "2572385079"
         ));
+    }
+
+    #[test]
+    fn rejects_legacy_workshop_id_field() {
+        let input = r#"
+            [mods]
+            wanddbg = { workshop_id = "2572385079" }
+        "#;
+
+        let error = crate::toml::parse_config(input).unwrap_err();
+        assert!(matches!(error, TomlConfigError::Validation { .. }));
+        assert!(error.to_string().contains("workshop_id"));
+        assert!(error.to_string().contains("write `id` instead"));
     }
 
     #[test]

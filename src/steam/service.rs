@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use super::{
-    NativeCommandRunner, SteamAppId, SteamCmdConfig, UnsupportedWorkshopContentProvider,
+    NativeCommandRunner, NativeHttpRequester, SteamAppId, SteamCmdConfig,
+    SteamCommunityMetadataProvider, UnsupportedWorkshopContentProvider,
     UnsupportedWorkshopMetadataProvider, WorkshopContentProvider, WorkshopMetadataProvider,
 };
 use super::steamcmd::SteamCmdContentProvider;
@@ -29,7 +30,9 @@ impl SteamServices {
 
     pub fn steamcmd(config: SteamCmdConfig) -> Self {
         Self::new(
-            Arc::new(UnsupportedWorkshopMetadataProvider),
+            Arc::new(SteamCommunityMetadataProvider::new(Arc::new(
+                NativeHttpRequester::default(),
+            ))),
             Arc::new(SteamCmdContentProvider::new(
                 config,
                 Arc::new(NativeCommandRunner),

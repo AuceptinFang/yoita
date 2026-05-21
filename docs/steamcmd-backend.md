@@ -83,7 +83,7 @@
 当前固定参数：
 
 - `appid = 881100`
-- `PublishedFileId` 来自 mod 配置中的 `id`（兼容 `workshop_id`）
+- `PublishedFileId` 来自 mod 配置中的 `id`
 
 示例：
 

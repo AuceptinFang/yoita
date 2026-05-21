@@ -79,10 +79,7 @@ pub struct ModConfig {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ModSource {
-    Steam {
-        #[serde(alias = "id")]
-        workshop_id: String,
-    },
+    Steam { id: String },
     Custom {
         #[serde(deserialize_with = "deserialize_url")]
         url: Url,
@@ -174,8 +171,10 @@ pub(crate) struct RawModSpec {
     pub source: Option<ModSource>,
     #[serde(default, deserialize_with = "deserialize_option_url")]
     pub url: Option<Url>,
-    #[serde(default, alias = "id")]
-    pub workshop_id: Option<String>,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default, rename = "workshop_id")]
+    pub legacy_workshop_id: Option<String>,
     #[serde(default)]
     pub kind: Option<String>,
 }
@@ -222,7 +221,7 @@ fn build_compact_mod(name: String, value: toml::Value) -> Result<ModConfig, Conf
     let field = format!("mods.{name}");
 
     match value {
-        toml::Value::String(version) => build_version_shorthand_mod(name, version),
+        toml::Value::String(id) => build_id_shorthand_mod(name, id),
         toml::Value::Table(_) => {
             let spec: RawModSpec = value.try_into().map_err(|error: toml::de::Error| {
                 ConfigValidationError::new(&field, error.message())
@@ -240,28 +239,19 @@ fn build_compact_mod(name: String, value: toml::Value) -> Result<ModConfig, Conf
     }
 }
 
-fn build_version_shorthand_mod(
+fn build_id_shorthand_mod(
     name: String,
-    version: String,
+    id: String,
 ) -> Result<ModConfig, ConfigValidationError> {
-    let field = format!("mods.{name}");
-    let version = version.trim();
-
-    if version.is_empty() {
-        return Err(ConfigValidationError::new(
-            field,
-            "cannot use an empty shorthand version",
-        ));
-    }
-
     build_mod_config(
         name,
         RawModSpec {
-            version: Some(version.to_owned()),
+            version: None,
             enabled: default_enabled(),
             source: None,
             url: None,
-            workshop_id: None,
+            id: Some(id),
+            legacy_workshop_id: None,
             kind: None,
         },
     )
@@ -269,13 +259,20 @@ fn build_version_shorthand_mod(
 
 fn build_mod_config(name: String, spec: RawModSpec) -> Result<ModConfig, ConfigValidationError> {
     let field = format!("mods.{name}");
+    if spec.legacy_workshop_id.is_some() {
+        return Err(ConfigValidationError::new(
+            &field,
+            "uses removed field `workshop_id`; write `id` instead",
+        ));
+    }
+
     let source = resolve_source(
         &field,
         &name,
         spec.source,
         spec.kind,
         spec.url,
-        spec.workshop_id,
+        spec.id,
     )?;
 
     Ok(ModConfig {
@@ -288,27 +285,27 @@ fn build_mod_config(name: String, spec: RawModSpec) -> Result<ModConfig, ConfigV
 
 fn resolve_source(
     field: &str,
-    default_steam_id: &str,
+    default_id: &str,
     source: Option<ModSource>,
     kind: Option<String>,
     url: Option<Url>,
-    workshop_id: Option<String>,
+    id: Option<String>,
 ) -> Result<ModSource, ConfigValidationError> {
-    if source.is_some() && (kind.is_some() || url.is_some() || workshop_id.is_some()) {
+    if source.is_some() && (kind.is_some() || url.is_some() || id.is_some()) {
         return Err(ConfigValidationError::new(
             field,
-            "cannot mix nested `source` with `kind`, `url`, or `id` / `workshop_id`",
+            "cannot mix nested `source` with `kind`, `url`, or `id`",
         ));
     }
 
     if let Some(source) = source {
-        return normalize_source(field, default_steam_id, source);
+        return normalize_source(field, default_id, source);
     }
 
-    let workshop_id = normalize_workshop_id(field, workshop_id)?;
+    let id = normalize_id(field, id)?;
 
     match kind.as_deref() {
-        Some("custom") => match (url, workshop_id) {
+        Some("custom") => match (url, id) {
             (Some(url), None) => Ok(ModSource::Custom { url }),
             (None, _) => Err(ConfigValidationError::new(
                 field,
@@ -316,13 +313,13 @@ fn resolve_source(
             )),
             (Some(_), Some(_)) => Err(ConfigValidationError::new(
                 field,
-                "with `kind = \"custom\"` cannot also define `id` / `workshop_id`",
+                "with `kind = \"custom\"` cannot also define `id`",
             )),
         },
-        Some("steam") => match (url, workshop_id) {
-            (None, Some(workshop_id)) => Ok(ModSource::Steam { workshop_id }),
+        Some("steam") => match (url, id) {
+            (None, Some(id)) => Ok(ModSource::Steam { id }),
             (None, None) => Ok(ModSource::Steam {
-                workshop_id: default_steam_id.to_owned(),
+                id: default_id.to_owned(),
             }),
             (Some(_), _) => Err(ConfigValidationError::new(
                 field,
@@ -333,15 +330,15 @@ fn resolve_source(
             field,
             format!("uses unsupported `kind = \"{other}\"`"),
         )),
-        None => match (url, workshop_id) {
+        None => match (url, id) {
             (Some(url), None) => Ok(ModSource::Custom { url }),
-            (None, Some(workshop_id)) => Ok(ModSource::Steam { workshop_id }),
+            (None, Some(id)) => Ok(ModSource::Steam { id }),
             (Some(_), Some(_)) => Err(ConfigValidationError::new(
                 field,
-                "must not define both `url` and `id` / `workshop_id` without an explicit `kind`",
+                "must not define both `url` and `id` without an explicit `kind`",
             )),
             (None, None) => Ok(ModSource::Steam {
-                workshop_id: default_steam_id.to_owned(),
+                id: default_id.to_owned(),
             }),
         },
     }
@@ -349,32 +346,28 @@ fn resolve_source(
 
 fn normalize_source(
     field: &str,
-    default_steam_id: &str,
+    default_id: &str,
     source: ModSource,
 ) -> Result<ModSource, ConfigValidationError> {
     match source {
-        ModSource::Steam { workshop_id } => Ok(ModSource::Steam {
-            workshop_id: normalize_workshop_id(field, Some(workshop_id))?
-                .unwrap_or_else(|| default_steam_id.to_owned()),
+        ModSource::Steam { id } => Ok(ModSource::Steam {
+            id: normalize_id(field, Some(id))?.unwrap_or_else(|| default_id.to_owned()),
         }),
         ModSource::Custom { url } => Ok(ModSource::Custom { url }),
     }
 }
 
-fn normalize_workshop_id(
+fn normalize_id(
     field: &str,
-    workshop_id: Option<String>,
+    id: Option<String>,
 ) -> Result<Option<String>, ConfigValidationError> {
-    match workshop_id {
-        Some(workshop_id) => {
-            let workshop_id = workshop_id.trim().to_owned();
-            if workshop_id.is_empty() {
-                Err(ConfigValidationError::new(
-                    field,
-                    "must define a non-empty `id` / `workshop_id`",
-                ))
+    match id {
+        Some(id) => {
+            let id = id.trim().to_owned();
+            if id.is_empty() {
+                Err(ConfigValidationError::new(field, "must define a non-empty `id`"))
             } else {
-                Ok(Some(workshop_id))
+                Ok(Some(id))
             }
         }
         None => Ok(None),

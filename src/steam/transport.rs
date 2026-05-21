@@ -9,6 +9,7 @@ use std::{
 };
 
 use reqwest::Url;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::error::Result;
 
@@ -58,6 +59,83 @@ pub trait HttpRequester: fmt::Debug + Send + Sync {
 
 pub trait CommandRunner: fmt::Debug + Send + Sync {
     fn run<'a>(&'a self, request: CommandRequest) -> SteamFuture<'a, Result<CommandOutput>>;
+}
+
+#[derive(Debug, Clone)]
+pub struct NativeHttpRequester {
+    client: reqwest::Client,
+}
+
+impl Default for NativeHttpRequester {
+    fn default() -> Self {
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { client }
+    }
+}
+
+impl HttpRequester for NativeHttpRequester {
+    fn send<'a>(&'a self, request: HttpRequest) -> SteamFuture<'a, Result<HttpResponse>> {
+        Box::pin(async move {
+            let url = request.url.clone();
+            let mut builder = match request.method {
+                HttpMethod::Get => self.client.get(request.url),
+                HttpMethod::Post => self.client.post(request.url),
+            };
+
+            if !request.query.is_empty() {
+                builder = builder.query(&request.query);
+            }
+
+            if !request.headers.is_empty() {
+                let mut headers = HeaderMap::new();
+                for (name, value) in &request.headers {
+                    let name = HeaderName::try_from(name.as_str()).map_err(|source| {
+                        anyhow::anyhow!("invalid HTTP header name `{name}`: {source}")
+                    })?;
+                    let value = HeaderValue::try_from(value.as_str()).map_err(|source| {
+                        anyhow::anyhow!("invalid HTTP header value for `{name}`: {source}")
+                    })?;
+                    headers.insert(name, value);
+                }
+                builder = builder.headers(headers);
+            }
+
+            if !request.form.is_empty() {
+                builder = builder.form(&request.form);
+            }
+
+            let response = builder.send().await.map_err(|source| {
+                anyhow::anyhow!("failed to request `{}`: {source}", url)
+            })?;
+            let status = response.status().as_u16();
+            let headers = response
+                .headers()
+                .iter()
+                .map(|(name, value)| {
+                    (
+                        name.as_str().to_owned(),
+                        value.to_str().unwrap_or_default().to_owned(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            let body = response.bytes().await.map_err(|source| {
+                anyhow::anyhow!("failed to read response body from `{}`: {source}", url)
+            })?;
+
+            Ok(HttpResponse {
+                status,
+                headers,
+                body: body.to_vec(),
+            })
+        })
+    }
 }
 
 #[derive(Debug, Default)]

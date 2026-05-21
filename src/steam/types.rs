@@ -111,6 +111,13 @@ pub struct WorkshopMetadataRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkshopSearchRequest {
+    pub app_id: SteamAppId,
+    pub query: String,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkshopItemDetails {
     pub item: WorkshopItemRef,
     pub title: Option<String>,

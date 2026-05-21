@@ -19,7 +19,10 @@ use crate::{
     error::Result,
     file::WorkspaceLayout,
     state::{ManagedModState, SyncState},
-    steam::{SteamCmdConfig, SteamContext, WorkshopContentRequest, WorkshopItemId, WorkshopItemRef},
+    steam::{
+        SteamCmdConfig, SteamContext, WorkshopContentRequest, WorkshopItemDetails,
+        WorkshopItemId, WorkshopItemRef, WorkshopSearchRequest,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -137,21 +140,30 @@ impl Yoita {
 
     async fn resolve_mod(&self, entry: &ModConfig) -> Result<ResolvedMod> {
         match &entry.source {
-            ModSource::Steam { workshop_id } => self.resolve_steam_mod(entry, workshop_id).await,
+            ModSource::Steam { id } => self.resolve_steam_mod(entry, id).await,
             ModSource::Custom { url } => self.download_custom_mod(entry, url).await,
         }
     }
 
-    async fn resolve_steam_mod(&self, entry: &ModConfig, workshop_id: &str) -> Result<ResolvedMod> {
+    async fn resolve_steam_mod(&self, entry: &ModConfig, id: &str) -> Result<ResolvedMod> {
         let steam = self.steam.as_ref().ok_or_else(|| {
             anyhow!(
                 "mod `{}` uses steam source but `[steam]` is missing",
                 entry.name
             )
         })?;
-        let workshop_id = workshop_id.parse::<WorkshopItemId>().with_context(|| {
-            format!("invalid steam workshop id for mod `{}`", entry.name)
-        })?;
+        let workshop_id = match id.parse::<WorkshopItemId>() {
+            Ok(id) => id,
+            Err(_) => self
+                .resolve_steam_workshop_id_by_name(steam, entry, id)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to resolve steam workshop id for mod `{}` from name `{}`",
+                        entry.name, id
+                    )
+                })?,
+        };
         let content = steam
             .content()
             .ensure_content(WorkshopContentRequest {
@@ -166,7 +178,46 @@ impl Yoita {
         })
     }
 
-    async fn download_custom_mod(&self, entry: &ModConfig, download_url: &Url) -> Result<ResolvedMod> {
+    async fn resolve_steam_workshop_id_by_name(
+        &self,
+        steam: &SteamContext,
+        entry: &ModConfig,
+        query: &str,
+    ) -> Result<WorkshopItemId> {
+        let results = steam
+            .metadata()
+            .search_items(WorkshopSearchRequest {
+                app_id: steam.app_id(),
+                query: query.to_owned(),
+                limit: 5,
+            })
+            .await?;
+
+        let selected = select_workshop_match(query, &results).ok_or_else(|| {
+            anyhow!(
+                "steam workshop search returned no results for mod `{}`",
+                entry.name
+            )
+        })?;
+
+        if results.len() > 1 {
+            tracing::warn!(
+                mod_name = %entry.name,
+                query,
+                chosen = %selected.item.workshop_id,
+                candidates = results.len(),
+                "steam name lookup returned multiple matches; choosing best current match"
+            );
+        }
+
+        Ok(selected.item.workshop_id)
+    }
+
+    async fn download_custom_mod(
+        &self,
+        entry: &ModConfig,
+        download_url: &Url,
+    ) -> Result<ResolvedMod> {
         let archive_path = self.layout.custom_archive_path(entry, download_url);
 
         if let Some(parent) = archive_path.parent() {
@@ -245,11 +296,33 @@ fn path_size(path: &Path) -> Result<u64> {
     for entry in fs::read_dir(path)
         .with_context(|| format!("failed to read directory `{}`", path.display()))?
     {
-        let entry = entry.with_context(|| format!("failed to read entry in `{}`", path.display()))?;
+        let entry =
+            entry.with_context(|| format!("failed to read entry in `{}`", path.display()))?;
         total += path_size(&entry.path())?;
     }
 
     Ok(total)
+}
+
+fn select_workshop_match<'a>(
+    query: &str,
+    results: &'a [WorkshopItemDetails],
+) -> Option<&'a WorkshopItemDetails> {
+    let normalized_query = normalize_workshop_query(query);
+    results
+        .iter()
+        .find(|item| {
+            item.title
+                .as_deref()
+                .map(normalize_workshop_query)
+                .as_deref()
+                == Some(normalized_query.as_str())
+        })
+        .or_else(|| results.first())
+}
+
+fn normalize_workshop_query(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -257,6 +330,7 @@ mod tests {
     use std::{
         collections::BTreeSet,
         path::Path,
+        sync::{Arc, Mutex},
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -266,6 +340,12 @@ mod tests {
         config::{ModConfig, ModSource, SteamConfig, YoitaConfig},
         file::WorkspaceLayout,
         state::{ManagedModState, SyncState},
+        steam::{
+            SteamAppId, SteamContext, SteamServices, WorkshopContentKind, WorkshopContentProvider,
+            WorkshopContentRequest, WorkshopItemContent, WorkshopItemDetails, WorkshopItemId,
+            WorkshopItemRef, WorkshopMetadataProvider, WorkshopMetadataRequest,
+            WorkshopSearchRequest,
+        },
     };
 
     use super::Yoita;
@@ -309,7 +389,7 @@ mod tests {
             version: Some("1.0.0".to_owned()),
             enabled: true,
             source: ModSource::Steam {
-                workshop_id: "1234567890".to_owned(),
+                id: "1234567890".to_owned(),
             },
         };
 
@@ -397,6 +477,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn steam_source_searches_by_name_when_id_is_not_numeric() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("yoita-name-search-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("mod.xml"), b"<Mod />").unwrap();
+
+        let metadata = Arc::new(FakeMetadataProvider {
+            results: vec![WorkshopItemDetails {
+                item: WorkshopItemRef::new(SteamAppId::NOITA, WorkshopItemId(2572385079)),
+                title: Some("wanddbg".to_owned()),
+                description: None,
+                preview_url: None,
+                file_type: None,
+                time_created: None,
+                time_updated: None,
+            }],
+            seen_query: Mutex::new(None),
+        });
+        let content = Arc::new(FakeContentProvider {
+            expected_item: WorkshopItemRef::new(SteamAppId::NOITA, WorkshopItemId(2572385079)),
+            source_path: root.clone(),
+        });
+
+        let app = Yoita {
+            http: Client::builder().build().unwrap(),
+            layout: WorkspaceLayout {
+                cache_dir: std::env::temp_dir().join("yoita-name-search-cache"),
+                staging_dir: std::env::temp_dir().join("yoita-name-search-staging"),
+                mount_dir: std::env::temp_dir().join("yoita-name-search-mount"),
+            },
+            steam: Some(SteamContext::new(
+                crate::steam::SteamCmdConfig {
+                    steamcmd_path: "steamcmd".into(),
+                    force_install_dir: ".yoita/steamcmd".into(),
+                    app_id: SteamAppId::NOITA,
+                    login: crate::steam::SteamLoginMode::Anonymous,
+                    timeout: std::time::Duration::from_secs(30),
+                },
+                SteamServices::new(metadata.clone(), content),
+            )),
+        };
+        let mod_config = ModConfig {
+            name: "wanddbg".to_owned(),
+            version: None,
+            enabled: true,
+            source: ModSource::Steam {
+                id: "wanddbg".to_owned(),
+            },
+        };
+
+        let resolved = app.resolve_mod(&mod_config).await.unwrap();
+
+        assert_eq!(resolved.source_path, root);
+        assert_eq!(*metadata.seen_query.lock().unwrap(), Some("wanddbg".to_owned()));
+
+        std::fs::remove_dir_all(resolved.source_path).unwrap();
+    }
+
+    #[tokio::test]
     async fn steam_source_reports_command_failure() {
         let config = YoitaConfig {
             config: Default::default(),
@@ -415,7 +558,7 @@ mod tests {
                 version: None,
                 enabled: true,
                 source: ModSource::Steam {
-                    workshop_id: "3454128340".to_owned(),
+                    id: "3454128340".to_owned(),
                 },
             }],
         };
@@ -426,5 +569,52 @@ mod tests {
 
         assert!(chain.contains("failed to resolve steam content for mod `wanddbg`"));
         assert!(chain.contains("failed to spawn"));
+    }
+
+    #[derive(Debug)]
+    struct FakeMetadataProvider {
+        results: Vec<WorkshopItemDetails>,
+        seen_query: Mutex<Option<String>>,
+    }
+
+    impl WorkshopMetadataProvider for FakeMetadataProvider {
+        fn fetch_item<'a>(
+            &'a self,
+            _request: WorkshopMetadataRequest,
+        ) -> crate::steam::SteamFuture<'a, crate::error::Result<Option<WorkshopItemDetails>>> {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn search_items<'a>(
+            &'a self,
+            request: WorkshopSearchRequest,
+        ) -> crate::steam::SteamFuture<'a, crate::error::Result<Vec<WorkshopItemDetails>>> {
+            Box::pin(async move {
+                *self.seen_query.lock().unwrap() = Some(request.query);
+                Ok(self.results.clone())
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct FakeContentProvider {
+        expected_item: WorkshopItemRef,
+        source_path: std::path::PathBuf,
+    }
+
+    impl WorkshopContentProvider for FakeContentProvider {
+        fn ensure_content<'a>(
+            &'a self,
+            request: WorkshopContentRequest,
+        ) -> crate::steam::SteamFuture<'a, crate::error::Result<WorkshopItemContent>> {
+            Box::pin(async move {
+                assert_eq!(request.item, self.expected_item);
+                Ok(WorkshopItemContent {
+                    item: request.item,
+                    source_path: self.source_path.clone(),
+                    kind: WorkshopContentKind::Directory,
+                })
+            })
+        }
     }
 }
