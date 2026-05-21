@@ -28,7 +28,7 @@ fn loads_example_config_from_tests_fixture() {
     assert_eq!(config.mods.len(), 3);
     assert!(matches!(
         &config.mods[0].source,
-        ModSource::Steam { workshop_id } if workshop_id == "2572385079"
+        ModSource::Steam { id } if id == "2572385079"
     ));
     assert!(!config.mods[1].enabled);
     assert!(matches!(config.mods[2].source, ModSource::Custom { .. }));

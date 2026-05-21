@@ -26,7 +26,7 @@ fn resolve_steamcmd_path() -> PathBuf {
 }
 
 #[tokio::test]
-#[ignore = "requires steamcmd and network; preserves files under tests/.artifacts/"]
+//#[ignore = "requires steamcmd and network; preserves files under tests/.artifacts/"]
 async fn downloads_workshop_item_from_example_config() {
     let mut config = toml::load_config(fixture_path("yoita.download.example.toml")).unwrap();
     let steam = config.steam.as_mut().unwrap();
@@ -39,9 +39,11 @@ async fn downloads_workshop_item_from_example_config() {
 
     let synced = &report.mods[0];
     assert_eq!(synced.name, "wanddbg");
-    assert!(synced
-        .source_path
-        .ends_with(Path::new("steamapps/workshop/content/881100/2572385079")));
+    assert!(
+        synced
+            .source_path
+            .ends_with(Path::new("steamapps/workshop/content/881100/2572385079"))
+    );
     assert!(synced.source_path.join("mod.xml").is_file());
     assert!(synced.source_path.join("mod_id.txt").is_file());
     assert_eq!(

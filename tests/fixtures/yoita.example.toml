@@ -1,3 +1,4 @@
+# 支持目录配置，用 id 或字符串简写定位 Steam 工坊项
 [config]
 cache_dir = ".yoita/cache"
 staging_dir = ".yoita/staging"
@@ -12,6 +13,6 @@ timeout_secs = 300
 login = "anonymous"
 
 [mods]
-wanddbg = { id = "2572385079" }
+wanddbg = "2572385079"
 edit-always = { id = "2194781427", enabled = false }
 custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }
