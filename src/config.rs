@@ -56,6 +56,7 @@ pub struct SteamConfig {
 #[serde(rename_all = "snake_case")]
 pub enum SteamBackend {
     #[default]
+    #[serde(alias = "steamcmd")]
     SteamCmd,
 }
 
@@ -79,6 +80,7 @@ pub struct ModConfig {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ModSource {
     Steam {
+        #[serde(alias = "id")]
         workshop_id: String,
     },
     Custom {
@@ -172,7 +174,7 @@ pub(crate) struct RawModSpec {
     pub source: Option<ModSource>,
     #[serde(default, deserialize_with = "deserialize_option_url")]
     pub url: Option<Url>,
-    #[serde(default)]
+    #[serde(default, alias = "id")]
     pub workshop_id: Option<String>,
     #[serde(default)]
     pub kind: Option<String>,
@@ -295,7 +297,7 @@ fn resolve_source(
     if source.is_some() && (kind.is_some() || url.is_some() || workshop_id.is_some()) {
         return Err(ConfigValidationError::new(
             field,
-            "cannot mix nested `source` with `kind`, `url`, or `workshop_id`",
+            "cannot mix nested `source` with `kind`, `url`, or `id` / `workshop_id`",
         ));
     }
 
@@ -314,7 +316,7 @@ fn resolve_source(
             )),
             (Some(_), Some(_)) => Err(ConfigValidationError::new(
                 field,
-                "with `kind = \"custom\"` cannot also define `workshop_id`",
+                "with `kind = \"custom\"` cannot also define `id` / `workshop_id`",
             )),
         },
         Some("steam") => match (url, workshop_id) {
@@ -336,7 +338,7 @@ fn resolve_source(
             (None, Some(workshop_id)) => Ok(ModSource::Steam { workshop_id }),
             (Some(_), Some(_)) => Err(ConfigValidationError::new(
                 field,
-                "must not define both `url` and `workshop_id` without an explicit `kind`",
+                "must not define both `url` and `id` / `workshop_id` without an explicit `kind`",
             )),
             (None, None) => Ok(ModSource::Steam {
                 workshop_id: default_steam_id.to_owned(),
@@ -369,7 +371,7 @@ fn normalize_workshop_id(
             if workshop_id.is_empty() {
                 Err(ConfigValidationError::new(
                     field,
-                    "must define a non-empty `workshop_id`",
+                    "must define a non-empty `id` / `workshop_id`",
                 ))
             } else {
                 Ok(Some(workshop_id))

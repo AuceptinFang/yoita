@@ -12,5 +12,6 @@ timeout_secs = 300
 login = "anonymous"
 
 [mods]
-edit-always = {}
 wanddbg = { id = "2572385079" }
+edit-always = { id = "2194781427", enabled = false }
+custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }

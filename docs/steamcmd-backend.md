@@ -83,7 +83,7 @@
 当前固定参数：
 
 - `appid = 881100`
-- `PublishedFileId` 来自 mod 配置中的 `workshop_id`
+- `PublishedFileId` 来自 mod 配置中的 `id`（兼容 `workshop_id`）
 
 示例：
 
@@ -418,7 +418,7 @@ password_env = "YOITA_STEAM_PASSWORD"
 
 ```toml
 [mods]
-wanddbg = { workshop_id = "3454128340" }
+wanddbg = { id = "2572385079" }
 ```
 
 ## 10. 已知限制

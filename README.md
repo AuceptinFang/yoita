@@ -13,13 +13,13 @@ cargo run -- yoita.toml
 [mods]
 edit-always = {}
 spell-lab = "1.0.0"
-wanddbg = { workshop_id = "3454128340" }
+wanddbg = { id = "2572385079" }
 custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }
 ```
 
 - 默认 source 是 `steam`
 - 默认 version 是“最新”
-- 只有名字和 steam 标识不一致时，才需要显式写 `workshop_id`
+- 显式指定 Steam 工坊项时，优先写 `id`
 
 当前 `sync` 的行为是：
 

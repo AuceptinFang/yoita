@@ -1,4 +1,5 @@
 /target
 /.codex/
 /example/
+/tests/.artifacts/
 .codex

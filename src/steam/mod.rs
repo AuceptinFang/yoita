@@ -14,7 +14,7 @@ pub use service::{SteamContext, SteamServices};
 pub use steamcmd::{SteamCmdConfig, SteamCmdScript, SteamLoginMode};
 pub use transport::{
     CommandOutput, CommandRequest, CommandRunner, HttpMethod, HttpRequest, HttpRequester,
-    HttpResponse, SteamFuture,
+    HttpResponse, NativeCommandRunner, SteamFuture,
 };
 pub use types::{
     SteamAppId, WorkshopContentKind, WorkshopContentRequest, WorkshopFileType, WorkshopItemContent,

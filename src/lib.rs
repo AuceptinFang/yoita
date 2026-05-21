@@ -67,7 +67,7 @@ impl Yoita {
             .map(|steam| {
                 let steamcmd = SteamCmdConfig::try_from(steam)
                     .context("failed to build steamcmd runtime config")?;
-                Ok::<SteamContext, anyhow::Error>(SteamContext::unsupported(steamcmd))
+                Ok::<SteamContext, anyhow::Error>(SteamContext::steamcmd(steamcmd))
             })
             .transpose()?;
 
@@ -397,12 +397,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn steam_source_reports_unimplemented_provider() {
+    async fn steam_source_reports_command_failure() {
         let config = YoitaConfig {
             config: Default::default(),
             steam: Some(SteamConfig {
                 backend: crate::config::SteamBackend::SteamCmd,
-                steamcmd_path: "steamcmd".into(),
+                steamcmd_path: "/definitely/missing/steamcmd".into(),
                 force_install_dir: ".yoita/steamcmd".into(),
                 app_id: 881100,
                 timeout_secs: 300,
@@ -422,9 +422,9 @@ mod tests {
 
         let app = Yoita::from_config(&config).unwrap();
         let error = app.resolve_mod(&config.mods[0]).await.unwrap_err();
+        let chain = format!("{error:#}");
 
-        assert!(error
-            .to_string()
-            .contains("failed to resolve steam content for mod `wanddbg`"));
+        assert!(chain.contains("failed to resolve steam content for mod `wanddbg`"));
+        assert!(chain.contains("failed to spawn"));
     }
 }

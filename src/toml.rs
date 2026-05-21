@@ -69,9 +69,25 @@ mod tests {
     }
 
     #[test]
+    fn parses_steam_mod_id_alias() {
+        let input = r#"
+            [mods]
+            wanddbg = { id = "2572385079" }
+        "#;
+
+        let config = crate::toml::parse_config(input).unwrap();
+        assert_eq!(config.mods.len(), 1);
+        assert!(matches!(
+            &config.mods[0].source,
+            ModSource::Steam { workshop_id } if workshop_id == "2572385079"
+        ));
+    }
+
+    #[test]
     fn parses_steamcmd_config_defaults() {
         let input = r#"
             [steam]
+            backend = "steamcmd"
 
             [mods]
             edit-always = {}

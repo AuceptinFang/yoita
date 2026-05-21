@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use super::{
-    SteamAppId, SteamCmdConfig, UnsupportedWorkshopContentProvider,
+    NativeCommandRunner, SteamAppId, SteamCmdConfig, UnsupportedWorkshopContentProvider,
     UnsupportedWorkshopMetadataProvider, WorkshopContentProvider, WorkshopMetadataProvider,
 };
+use super::steamcmd::SteamCmdContentProvider;
 
 #[derive(Debug, Clone)]
 pub struct SteamServices {
@@ -23,6 +24,16 @@ impl SteamServices {
         Self::new(
             Arc::new(UnsupportedWorkshopMetadataProvider),
             Arc::new(UnsupportedWorkshopContentProvider),
+        )
+    }
+
+    pub fn steamcmd(config: SteamCmdConfig) -> Self {
+        Self::new(
+            Arc::new(UnsupportedWorkshopMetadataProvider),
+            Arc::new(SteamCmdContentProvider::new(
+                config,
+                Arc::new(NativeCommandRunner),
+            )),
         )
     }
 
@@ -48,6 +59,10 @@ impl SteamContext {
 
     pub fn unsupported(config: SteamCmdConfig) -> Self {
         Self::new(config, SteamServices::unsupported())
+    }
+
+    pub fn steamcmd(config: SteamCmdConfig) -> Self {
+        Self::new(config.clone(), SteamServices::steamcmd(config))
     }
 
     pub fn app_id(&self) -> SteamAppId {
