@@ -516,6 +516,7 @@ mod tests {
             steam: Some(SteamContext::new(
                 crate::steam::SteamCmdConfig {
                     steamcmd_path: "steamcmd".into(),
+                    working_dir: std::env::current_dir().unwrap(),
                     force_install_dir: ".yoita/steamcmd".into(),
                     app_id: SteamAppId::NOITA,
                     login: crate::steam::SteamLoginMode::Anonymous,
@@ -551,6 +552,7 @@ mod tests {
             steam: Some(SteamConfig {
                 backend: crate::config::SteamBackend::SteamCmd,
                 steamcmd_path: "/definitely/missing/steamcmd".into(),
+                working_dir: None,
                 force_install_dir: ".yoita/steamcmd".into(),
                 app_id: 881100,
                 timeout_secs: 300,

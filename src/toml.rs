@@ -117,11 +117,28 @@ mod tests {
             std::path::PathBuf::from("steamcmd")
         };
         assert_eq!(steam.steamcmd_path, expected_steamcmd_path);
+        assert_eq!(steam.working_dir, None);
         assert_eq!(
             steam.force_install_dir,
             std::path::PathBuf::from(".yoita/steamcmd")
         );
         assert_eq!(steam.login, SteamLoginConfig::Anonymous);
+    }
+
+    #[test]
+    fn parses_explicit_steam_working_dir() {
+        let input = r#"
+            [steam]
+            working_dir = "."
+
+            [mods]
+            wanddbg = {}
+        "#;
+
+        let config = crate::toml::parse_config(input).unwrap();
+        let steam = config.steam.unwrap();
+
+        assert_eq!(steam.working_dir, Some(std::path::PathBuf::from(".")));
     }
 
     #[test]

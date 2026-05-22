@@ -39,6 +39,8 @@ pub struct SteamConfig {
     pub backend: SteamBackend,
     #[serde(default = "default_steamcmd_path")]
     pub steamcmd_path: PathBuf,
+    #[serde(default)]
+    pub working_dir: Option<PathBuf>,
     #[serde(default = "default_force_install_dir")]
     pub force_install_dir: PathBuf,
     #[serde(default = "default_app_id")]

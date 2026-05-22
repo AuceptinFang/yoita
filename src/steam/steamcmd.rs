@@ -29,6 +29,7 @@ pub enum SteamLoginMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SteamCmdConfig {
     pub steamcmd_path: PathBuf,
+    pub working_dir: PathBuf,
     pub force_install_dir: PathBuf,
     pub app_id: super::SteamAppId,
     pub login: SteamLoginMode,
@@ -112,7 +113,7 @@ impl SteamCmdContentProvider {
         Ok(CommandRequest {
             program: self.config.steamcmd_path.clone(),
             args,
-            current_dir: None,
+            current_dir: Some(self.config.working_dir.clone()),
             env: BTreeMap::new(),
             timeout: self.config.timeout,
         })
@@ -199,10 +200,16 @@ impl TryFrom<&SteamConfig> for SteamCmdConfig {
                     .to_owned(),
             },
         };
+        let working_dir = absolute_working_dir(config.working_dir.as_deref())?;
 
         Ok(Self {
-            steamcmd_path: config.steamcmd_path.clone(),
-            force_install_dir: absolute_force_install_dir(&config.force_install_dir)?,
+            steamcmd_path: resolve_steamcmd_path(
+                &config.steamcmd_path,
+                &working_dir,
+                config.working_dir.is_some(),
+            ),
+            working_dir: working_dir.clone(),
+            force_install_dir: absolute_force_install_dir(&working_dir, &config.force_install_dir)?,
             app_id: super::SteamAppId(config.app_id),
             login,
             timeout: Duration::from_secs(config.timeout_secs),
@@ -210,14 +217,38 @@ impl TryFrom<&SteamConfig> for SteamCmdConfig {
     }
 }
 
-fn absolute_force_install_dir(path: &Path) -> std::result::Result<PathBuf, anyhow::Error> {
+fn absolute_working_dir(path: Option<&Path>) -> std::result::Result<PathBuf, anyhow::Error> {
+    match path {
+        Some(path) if path.is_absolute() => Ok(path.to_path_buf()),
+        Some(path) => Ok(std::env::current_dir()
+            .context("failed to resolve current working directory for steamcmd")?
+            .join(path)),
+        None => std::env::current_dir()
+            .context("failed to resolve current working directory for steamcmd"),
+    }
+}
+
+fn resolve_steamcmd_path(path: &Path, working_dir: &Path, force_relative: bool) -> PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+
+    if force_relative || path.components().count() > 1 {
+        working_dir.join(path)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+fn absolute_force_install_dir(
+    working_dir: &Path,
+    path: &Path,
+) -> std::result::Result<PathBuf, anyhow::Error> {
     if path.is_absolute() {
         return Ok(path.to_path_buf());
     }
 
-    Ok(std::env::current_dir()
-        .context("failed to resolve current working directory for steamcmd")?
-        .join(path))
+    Ok(working_dir.join(path))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -237,11 +268,14 @@ impl SteamCmdScript {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+    };
 
     use super::{
         SteamCmdConfig, SteamCmdContentProvider, SteamCmdScript, SteamLoginMode,
-        absolute_force_install_dir,
+        absolute_force_install_dir, absolute_working_dir, resolve_steamcmd_path,
     };
     use crate::steam::{
         CommandOutput, CommandRequest, CommandRunner, SteamAppId, WorkshopContentRequest,
@@ -252,6 +286,7 @@ mod tests {
     fn steamcmd_content_dir_uses_app_and_item_ids() {
         let config = SteamCmdConfig {
             steamcmd_path: "/tmp/steamcmd.sh".into(),
+            working_dir: std::env::temp_dir(),
             force_install_dir: "/tmp/yoita-steamcmd".into(),
             app_id: SteamAppId::NOITA,
             login: SteamLoginMode::Anonymous,
@@ -287,6 +322,7 @@ mod tests {
     fn steamcmd_download_request_uses_anonymous_login() {
         let config = SteamCmdConfig {
             steamcmd_path: "/tmp/steamcmd.sh".into(),
+            working_dir: std::env::temp_dir(),
             force_install_dir: "/tmp/yoita-steamcmd".into(),
             app_id: SteamAppId::NOITA,
             login: SteamLoginMode::Anonymous,
@@ -310,15 +346,44 @@ mod tests {
                 "+quit",
             ]
         );
+        assert_eq!(request.current_dir, Some(std::env::temp_dir()));
     }
 
     #[test]
     fn relative_force_install_dir_is_resolved_against_current_dir() {
-        let path = absolute_force_install_dir(std::path::Path::new("tests/.artifacts/steamcmd"))
-            .unwrap();
+        let working_dir = absolute_working_dir(None).unwrap();
+        let path =
+            absolute_force_install_dir(&working_dir, Path::new("tests/.artifacts/steamcmd"))
+                .unwrap();
 
         assert!(path.is_absolute());
         assert!(path.ends_with(std::path::Path::new("tests/.artifacts/steamcmd")));
+    }
+
+    #[test]
+    fn bare_steamcmd_path_stays_bare_without_working_dir_override() {
+        let working_dir = absolute_working_dir(None).unwrap();
+        let path = resolve_steamcmd_path(Path::new("steamcmd"), &working_dir, false);
+
+        assert_eq!(path, PathBuf::from("steamcmd"));
+    }
+
+    #[test]
+    fn relative_paths_are_resolved_against_explicit_working_dir() {
+        let working_dir = PathBuf::from("/tmp/yoita-working-dir");
+
+        assert_eq!(
+            resolve_steamcmd_path(Path::new("steamcmd.exe"), &working_dir, true),
+            working_dir.join("steamcmd.exe")
+        );
+        assert_eq!(
+            resolve_steamcmd_path(Path::new("bin/steamcmd.exe"), &working_dir, false),
+            working_dir.join("bin/steamcmd.exe")
+        );
+        assert_eq!(
+            absolute_force_install_dir(&working_dir, Path::new(".yoita/steamcmd")).unwrap(),
+            working_dir.join(".yoita/steamcmd")
+        );
     }
 
     #[tokio::test]
@@ -336,6 +401,7 @@ mod tests {
 
         let config = SteamCmdConfig {
             steamcmd_path: "/tmp/steamcmd.sh".into(),
+            working_dir: std::env::temp_dir(),
             force_install_dir: root.clone(),
             app_id: SteamAppId::NOITA,
             login: SteamLoginMode::Anonymous,
