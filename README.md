@@ -10,11 +10,12 @@ cargo run -- yoita.toml
 一个最小可用的 `yoita.toml`：
 
 ```toml
+[steam]
 [mods]
-edit-always = {}
-spell-lab = "3415004123"
-wanddbg = { id = "2572385079" }
-custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }
+edit-always = {}  # 支持mod名搜索
+spell-lab = "2297568811"  # 事实上workshop_id才是真正的表示符
+wanddbg = { id = "2572385079" } # Workshop_id 这么写也可以
+custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }  # 也可以自己提供下载url
 ```
 
 - 默认 source 是 `steam`
@@ -53,5 +54,4 @@ custom-pack = { kind = "custom", url = "https://example.invalid/mod.zip" }
 ## yoita.toml todo
 
 - 支持本地目录或本地压缩包作为 mod source
-- 明确 `version` 在 `yoita.toml` 里的语义，或者直接删掉
 - 继续收敛 `yoita.toml` 写法，只保留一套推荐格式

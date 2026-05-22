@@ -6,7 +6,7 @@ use reqwest::Url;
 use crate::error::Result;
 
 use super::{
-    HttpMethod, HttpRequest, HttpRequester, SteamFuture, SteamAppId, WorkshopItemDetails,
+    HttpMethod, HttpRequest, HttpRequester, SteamAppId, SteamFuture, WorkshopItemDetails,
     WorkshopItemId, WorkshopItemRef, WorkshopMetadataProvider, WorkshopMetadataRequest,
     WorkshopSearchRequest,
 };
@@ -23,6 +23,17 @@ impl SteamCommunityMetadataProvider {
         Self { requester }
     }
 
+    /// 构造 Steam Community Workshop 搜索请求。
+    ///
+    /// 当前实际访问的是：
+    /// - 路径：`/workshop/browse/`
+    /// - 路径参数：无
+    /// - query 参数：
+    ///   - `appid`：目标游戏的 Steam app id
+    ///   - `searchtext`：搜索关键字
+    ///   - `childpublishedfileid=0`：沿用页面搜索默认值
+    ///   - `browsesort=textsearch`：要求按文本搜索
+    ///   - `section=home`：沿用页面搜索默认值
     fn build_search_request(&self, request: &WorkshopSearchRequest) -> Result<HttpRequest> {
         let url = Url::parse(STEAM_WORKSHOP_BROWSE_URL)
             .context("failed to parse steam workshop browse URL")?;
@@ -95,10 +106,10 @@ impl WorkshopMetadataProvider for SteamCommunityMetadataProvider {
         _request: WorkshopMetadataRequest,
     ) -> SteamFuture<'a, Result<Option<WorkshopItemDetails>>> {
         Box::pin(async {
-            Err(anyhow::anyhow!(
-                "steam community metadata fetch by workshop id is not implemented"
+            Err(
+                anyhow::anyhow!("steam community metadata fetch by workshop id is not implemented")
+                    .into(),
             )
-            .into())
         })
     }
 
@@ -175,7 +186,10 @@ mod tests {
         assert!(results.is_empty());
 
         let request = requester.last_request.lock().unwrap().clone().unwrap();
-        assert_eq!(request.url.as_str(), "https://steamcommunity.com/workshop/browse/");
+        assert_eq!(
+            request.url.as_str(),
+            "https://steamcommunity.com/workshop/browse/"
+        );
         assert_eq!(request.query.get("appid"), Some(&"881100".to_owned()));
         assert_eq!(request.query.get("searchtext"), Some(&"wanddbg".to_owned()));
         assert_eq!(

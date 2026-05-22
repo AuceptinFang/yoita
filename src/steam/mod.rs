@@ -6,8 +6,8 @@ mod steamcmd;
 mod transport;
 mod types;
 
-pub use content::content_kind_for_path;
 pub use community::SteamCommunityMetadataProvider;
+pub use content::content_kind_for_path;
 pub use provider::{
     UnsupportedWorkshopContentProvider, UnsupportedWorkshopMetadataProvider,
     WorkshopContentProvider, WorkshopMetadataProvider,

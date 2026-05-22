@@ -75,10 +75,19 @@ impl SteamCmdContentProvider {
             .with_context(|| format!("failed to read workshop content dir `{}`", path.display()))?
             .next()
             .transpose()
-            .with_context(|| format!("failed to read workshop content entry in `{}`", path.display()))?
+            .with_context(|| {
+                format!(
+                    "failed to read workshop content entry in `{}`",
+                    path.display()
+                )
+            })?
             .is_some())
     }
 
+    /// 构造一次 `steamcmd` 下载请求。
+    ///
+    /// 最终参数形如：
+    /// `+force_install_dir <dir> +login ... +workshop_download_item <app_id> <workshop_id> +quit`
     fn download_request(&self, workshop_id: WorkshopItemId) -> Result<CommandRequest> {
         let mut args = vec![
             "+force_install_dir".to_owned(),
@@ -278,8 +287,8 @@ mod tests {
         absolute_force_install_dir, absolute_working_dir, resolve_steamcmd_path,
     };
     use crate::steam::{
-        CommandOutput, CommandRequest, CommandRunner, SteamAppId, WorkshopContentRequest,
-        WorkshopContentProvider, WorkshopItemId, WorkshopItemRef,
+        CommandOutput, CommandRequest, CommandRunner, SteamAppId, WorkshopContentProvider,
+        WorkshopContentRequest, WorkshopItemId, WorkshopItemRef,
     };
 
     #[test]
@@ -328,11 +337,16 @@ mod tests {
             login: SteamLoginMode::Anonymous,
             timeout: std::time::Duration::from_secs(30),
         };
-        let provider = SteamCmdContentProvider::new(config, Arc::new(FakeRunner::default()));
+        let provider = SteamCmdContentProvider::new(config, Arc::new(FakeRunner));
 
-        let request = provider.download_request(WorkshopItemId(2572385079)).unwrap();
+        let request = provider
+            .download_request(WorkshopItemId(2572385079))
+            .unwrap();
 
-        assert_eq!(request.program, std::path::PathBuf::from("/tmp/steamcmd.sh"));
+        assert_eq!(
+            request.program,
+            std::path::PathBuf::from("/tmp/steamcmd.sh")
+        );
         assert_eq!(
             request.args,
             vec![
@@ -352,9 +366,8 @@ mod tests {
     #[test]
     fn relative_force_install_dir_is_resolved_against_current_dir() {
         let working_dir = absolute_working_dir(None).unwrap();
-        let path =
-            absolute_force_install_dir(&working_dir, Path::new("tests/.artifacts/steamcmd"))
-                .unwrap();
+        let path = absolute_force_install_dir(&working_dir, Path::new("tests/.artifacts/steamcmd"))
+            .unwrap();
 
         assert!(path.is_absolute());
         assert!(path.ends_with(std::path::Path::new("tests/.artifacts/steamcmd")));
@@ -407,7 +420,7 @@ mod tests {
             login: SteamLoginMode::Anonymous,
             timeout: std::time::Duration::from_secs(30),
         };
-        let provider = SteamCmdContentProvider::new(config, Arc::new(FakeRunner::default()));
+        let provider = SteamCmdContentProvider::new(config, Arc::new(FakeRunner));
 
         let content = provider
             .ensure_content(WorkshopContentRequest {

@@ -109,10 +109,10 @@ impl Yoita {
             self.layout
                 .sync_to_mount(&resolved.source_path, &mount_path)?;
 
-            if let Some(previous) = previous {
-                if previous.mount_path != mount_path {
-                    self.layout.remove_mount_path(&previous.mount_path)?;
-                }
+            if let Some(previous) = previous
+                && previous.mount_path != mount_path
+            {
+                self.layout.remove_mount_path(&previous.mount_path)?;
             }
 
             state.mods.insert(

@@ -3,6 +3,9 @@ use std::{fmt, path::PathBuf, str::FromStr};
 use reqwest::Url;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// Steam 应用 id。
+///
+/// 例如 Noita 的 app id 是 `881100`。
 pub struct SteamAppId(pub u32);
 
 impl SteamAppId {
@@ -22,6 +25,9 @@ impl fmt::Display for SteamAppId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// Steam Workshop 条目 id。
+///
+/// 例如 `2572385079`。
 pub struct WorkshopItemId(pub u64);
 
 impl fmt::Display for WorkshopItemId {
@@ -46,8 +52,13 @@ impl FromStr for WorkshopItemId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// 唯一标识一个 Workshop 条目。
+///
+/// `app_id` 和 `workshop_id` 合在一起，就是后续请求内容或元数据时的主键。
 pub struct WorkshopItemRef {
+    /// Steam 应用 id。
     pub app_id: SteamAppId,
+    /// Workshop 条目 id。
     pub workshop_id: WorkshopItemId,
 }
 
@@ -106,14 +117,30 @@ impl From<u32> for WorkshopFileType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 按已知 Workshop 条目 id 获取元数据的请求。
+///
+/// 这里没有单独拆分“路径参数”字段：
+/// `app_id` / `workshop_id` 都包含在 `item` 里，具体映射到 URL path、query
+/// 还是其他传输层参数，由具体 provider 决定。
 pub struct WorkshopMetadataRequest {
+    /// 要查询的 Workshop 条目标识。
     pub item: WorkshopItemRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 按名称或关键字搜索 Workshop 条目的请求。
+///
+/// 在当前的 `SteamCommunityMetadataProvider` 实现里：
+/// - 没有路径参数
+/// - `app_id` 会映射到 query 参数 `appid`
+/// - `query` 会映射到 query 参数 `searchtext`
+/// - `limit` 只是本地截断上限，不会直接发给 Steam
 pub struct WorkshopSearchRequest {
+    /// 目标游戏的 Steam app id，对应 query 参数 `appid`。
     pub app_id: SteamAppId,
+    /// 搜索关键字，对应 query 参数 `searchtext`。
     pub query: String,
+    /// 最多保留多少条搜索结果。
     pub limit: usize,
 }
 
@@ -129,7 +156,12 @@ pub struct WorkshopItemDetails {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 确保某个 Workshop 条目的本地内容已经可用的请求。
+///
+/// 常见实现会根据 `item.app_id` 和 `item.workshop_id`
+/// 去拼接下载命令或本地缓存目录。
 pub struct WorkshopContentRequest {
+    /// 要下载或复用本地缓存的 Workshop 条目标识。
     pub item: WorkshopItemRef,
 }
 

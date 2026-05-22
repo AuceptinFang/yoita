@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use super::steamcmd::SteamCmdContentProvider;
 use super::{
     NativeCommandRunner, NativeHttpRequester, SteamAppId, SteamCmdConfig,
     SteamCommunityMetadataProvider, UnsupportedWorkshopContentProvider,
     UnsupportedWorkshopMetadataProvider, WorkshopContentProvider, WorkshopMetadataProvider,
 };
-use super::steamcmd::SteamCmdContentProvider;
 
 #[derive(Debug, Clone)]
 pub struct SteamServices {

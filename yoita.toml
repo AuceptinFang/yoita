@@ -1,16 +1,61 @@
 [config]
-cache_dir = ".yoita/cache"
-staging_dir = ".yoita/staging"
+# Download cache for custom sources and state data.
+# cache_dir = ".yoita/cache"
+
+# Temporary staging directory used during sync.
+# staging_dir = ".yoita/staging"
+
+# Noita's mods directory. 记得替换！！
 mount_dir = "./mods"
 
 [steam]
-backend = "steamcmd"
-steamcmd_path = "steamcmd"
-force_install_dir = ".yoita/steamcmd"
-app_id = 881100
-timeout_secs = 300
+# The only supported backend right now.
+# backend = "steamcmd"
+
+# Windows: put steamcmd.exe next to yoita.exe and yoita.toml.
+steamcmd_path = "./steamcmd.exe"
+
+# Linux / WSL example:
+# steamcmd_path = "steamcmd"
+
+# If omitted, steamcmd uses the current directory.
+# steamcmd will also create appcache / logs / steamapps and similar files there.
+# working_dir = "."
+
+# Where downloaded workshop content is stored.
+# force_install_dir = ".yoita/steamcmd"
+
+# Noita's Steam app id. Usually no need to change.
+# app_id = 881100
+
+# Timeout in seconds for one steamcmd invocation.
+# timeout_secs = 300
+
+# Anonymous login is enough for normal public workshop mods.
 login = "anonymous"
 
+# Use account login only when anonymous access is not enough.
+# login = "account"
+# username = "your_steam_username"
+# password_env = "YOITA_STEAM_PASSWORD"
+
 [mods]
-edit-always = {}
-wanddbg = { id = "2572385079" }
+# Recommended: write the workshop id directly.
+wanddbg = "2572385079"
+
+# Name search also works, but it needs access to steamcommunity.com
+# and may choose the wrong mod when multiple results match.
+# edit-always = {}
+
+# Full Steam form.
+# some-steam-mod = { id = "1234567890" }
+
+# Disable one mod temporarily.
+# some-disabled-mod = { id = "1234567890", enabled = false }
+
+# Custom download source.
+# example-custom = { kind = "custom", url = "https://example.invalid/noita/mods/example.zip" }
+
+# `version` is accepted, but it does not control Steam Workshop downloads.
+# It is mainly useful for some custom-source workflows and state tracking.
+# example-custom-versioned = { kind = "custom", url = "https://example.invalid/noita/mods/example.zip", version = "1.0.0" }

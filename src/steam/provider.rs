@@ -8,11 +8,13 @@ use super::{
 };
 
 pub trait WorkshopMetadataProvider: fmt::Debug + Send + Sync {
+    /// 按已知 `app_id + workshop_id` 获取单个条目的元数据。
     fn fetch_item<'a>(
         &'a self,
         request: WorkshopMetadataRequest,
     ) -> SteamFuture<'a, Result<Option<WorkshopItemDetails>>>;
 
+    /// 按关键字搜索多个条目。
     fn search_items<'a>(
         &'a self,
         request: WorkshopSearchRequest,
@@ -20,6 +22,9 @@ pub trait WorkshopMetadataProvider: fmt::Debug + Send + Sync {
 }
 
 pub trait WorkshopContentProvider: fmt::Debug + Send + Sync {
+    /// 确保某个 Workshop 条目的本地内容存在。
+    ///
+    /// provider 可以选择复用已有缓存，也可以触发真实下载。
     fn ensure_content<'a>(
         &'a self,
         request: WorkshopContentRequest,
@@ -34,14 +39,18 @@ impl WorkshopMetadataProvider for UnsupportedWorkshopMetadataProvider {
         &'a self,
         _request: WorkshopMetadataRequest,
     ) -> SteamFuture<'a, Result<Option<WorkshopItemDetails>>> {
-        Box::pin(async { Err(anyhow::anyhow!("steam metadata provider is not implemented").into()) })
+        Box::pin(async {
+            Err(anyhow::anyhow!("steam metadata provider is not implemented").into())
+        })
     }
 
     fn search_items<'a>(
         &'a self,
         _request: WorkshopSearchRequest,
     ) -> SteamFuture<'a, Result<Vec<WorkshopItemDetails>>> {
-        Box::pin(async { Err(anyhow::anyhow!("steam metadata provider is not implemented").into()) })
+        Box::pin(async {
+            Err(anyhow::anyhow!("steam metadata provider is not implemented").into())
+        })
     }
 }
 

@@ -1,10 +1,5 @@
 use std::{
-    collections::BTreeMap,
-    fmt,
-    future::Future,
-    path::PathBuf,
-    pin::Pin,
-    process::Stdio,
+    collections::BTreeMap, fmt, future::Future, path::PathBuf, pin::Pin, process::Stdio,
     time::Duration,
 };
 
@@ -22,42 +17,77 @@ pub enum HttpMethod {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 一次通用 HTTP 请求。
+///
+/// 约定：
+/// - URL path 直接体现在 `url` 里，不单独拆成“路径参数”字段
+/// - query 参数放在 `query`
+/// - 表单请求体放在 `form`
+/// - 额外请求头放在 `headers`
 pub struct HttpRequest {
+    /// HTTP 方法，例如 `GET` / `POST`。
     pub method: HttpMethod,
+    /// 完整 URL。
+    ///
+    /// 如果接口有路径参数，应当在构造请求前就把它们展开到这个 URL 里。
     pub url: Url,
+    /// URL 查询参数。
     pub query: BTreeMap<String, String>,
+    /// HTTP 请求头。
     pub headers: BTreeMap<String, String>,
+    /// `application/x-www-form-urlencoded` 表单字段。
     pub form: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// HTTP 响应的最小抽象。
 pub struct HttpResponse {
+    /// HTTP 状态码。
     pub status: u16,
+    /// 响应头。
     pub headers: BTreeMap<String, String>,
+    /// 原始响应体字节。
     pub body: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 一次外部命令执行请求。
+///
+/// 当前主要用于启动 `steamcmd`。
 pub struct CommandRequest {
+    /// 可执行文件路径。
     pub program: PathBuf,
+    /// 命令行参数，按 token 切分。
     pub args: Vec<String>,
+    /// 进程工作目录。
+    ///
+    /// 如果外部程序会在当前目录生成日志、缓存或其他状态文件，
+    /// 就应该在这里显式指定。
     pub current_dir: Option<PathBuf>,
+    /// 额外环境变量。
     pub env: BTreeMap<String, String>,
+    /// 命令最长允许运行多久。
     pub timeout: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 一次外部命令执行结果。
 pub struct CommandOutput {
+    /// 退出码；如果进程被信号终止或平台拿不到退出码，则可能为 `None`。
     pub exit_status: Option<i32>,
+    /// 标准输出。
     pub stdout: String,
+    /// 标准错误输出。
     pub stderr: String,
 }
 
 pub trait HttpRequester: fmt::Debug + Send + Sync {
+    /// 发送一个 HTTP 请求。
     fn send<'a>(&'a self, request: HttpRequest) -> SteamFuture<'a, Result<HttpResponse>>;
 }
 
 pub trait CommandRunner: fmt::Debug + Send + Sync {
+    /// 启动一个外部命令并等待它结束。
     fn run<'a>(&'a self, request: CommandRequest) -> SteamFuture<'a, Result<CommandOutput>>;
 }
 
@@ -111,9 +141,10 @@ impl HttpRequester for NativeHttpRequester {
                 builder = builder.form(&request.form);
             }
 
-            let response = builder.send().await.map_err(|source| {
-                anyhow::anyhow!("failed to request `{}`: {source}", url)
-            })?;
+            let response = builder
+                .send()
+                .await
+                .map_err(|source| anyhow::anyhow!("failed to request `{}`: {source}", url))?;
             let status = response.status().as_u16();
             let headers = response
                 .headers()
@@ -161,10 +192,7 @@ impl CommandRunner for NativeCommandRunner {
             }
 
             let child = command.spawn().map_err(|source| {
-                anyhow::anyhow!(
-                    "failed to spawn `{}`: {source}",
-                    request.program.display()
-                )
+                anyhow::anyhow!("failed to spawn `{}`: {source}", request.program.display())
             })?;
             let output = tokio::time::timeout(request.timeout, child.wait_with_output())
                 .await
