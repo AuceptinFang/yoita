@@ -111,7 +111,12 @@ mod tests {
 
         assert_eq!(steam.app_id, 881100);
         assert_eq!(steam.timeout_secs, 300);
-        assert_eq!(steam.steamcmd_path, std::path::PathBuf::from("steamcmd"));
+        let expected_steamcmd_path = if cfg!(windows) {
+            std::path::PathBuf::from("./steamcmd.exe")
+        } else {
+            std::path::PathBuf::from("steamcmd")
+        };
+        assert_eq!(steam.steamcmd_path, expected_steamcmd_path);
         assert_eq!(
             steam.force_install_dir,
             std::path::PathBuf::from(".yoita/steamcmd")

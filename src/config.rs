@@ -9,9 +9,10 @@ use crate::error::ConfigValidationError;
 pub struct YoitaConfig {
     pub config: RuntimeConfig,
     pub steam: Option<SteamConfig>,
-    pub mods: Vec<ModConfig>,
+    pub mods: Vec<ModConfig>, // TODO: 改成Option，允许为空
 }
 
+/// 需要用到的三个目录，存储下载文件的，用于挂载（复制）的，目标目录
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct RuntimeConfig {
     #[serde(default = "default_cache_dir")]
@@ -79,7 +80,9 @@ pub struct ModConfig {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ModSource {
-    Steam { id: String },
+    Steam {
+        id: String,
+    },
     Custom {
         #[serde(deserialize_with = "deserialize_url")]
         url: Url,
@@ -99,7 +102,11 @@ fn default_mount_dir() -> PathBuf {
 }
 
 fn default_steamcmd_path() -> PathBuf {
-    PathBuf::from("steamcmd")
+    if cfg!(windows) {
+        PathBuf::from("./steamcmd.exe")
+    } else {
+        PathBuf::from("steamcmd")
+    }
 }
 
 fn default_force_install_dir() -> PathBuf {
@@ -239,10 +246,7 @@ fn build_compact_mod(name: String, value: toml::Value) -> Result<ModConfig, Conf
     }
 }
 
-fn build_id_shorthand_mod(
-    name: String,
-    id: String,
-) -> Result<ModConfig, ConfigValidationError> {
+fn build_id_shorthand_mod(name: String, id: String) -> Result<ModConfig, ConfigValidationError> {
     build_mod_config(
         name,
         RawModSpec {
@@ -266,14 +270,7 @@ fn build_mod_config(name: String, spec: RawModSpec) -> Result<ModConfig, ConfigV
         ));
     }
 
-    let source = resolve_source(
-        &field,
-        &name,
-        spec.source,
-        spec.kind,
-        spec.url,
-        spec.id,
-    )?;
+    let source = resolve_source(&field, &name, spec.source, spec.kind, spec.url, spec.id)?;
 
     Ok(ModConfig {
         name,
@@ -357,15 +354,15 @@ fn normalize_source(
     }
 }
 
-fn normalize_id(
-    field: &str,
-    id: Option<String>,
-) -> Result<Option<String>, ConfigValidationError> {
+fn normalize_id(field: &str, id: Option<String>) -> Result<Option<String>, ConfigValidationError> {
     match id {
         Some(id) => {
             let id = id.trim().to_owned();
             if id.is_empty() {
-                Err(ConfigValidationError::new(field, "must define a non-empty `id`"))
+                Err(ConfigValidationError::new(
+                    field,
+                    "must define a non-empty `id`",
+                ))
             } else {
                 Ok(Some(id))
             }

@@ -20,8 +20,8 @@ use crate::{
     file::WorkspaceLayout,
     state::{ManagedModState, SyncState},
     steam::{
-        SteamCmdConfig, SteamContext, WorkshopContentRequest, WorkshopItemDetails,
-        WorkshopItemId, WorkshopItemRef, WorkshopSearchRequest,
+        SteamCmdConfig, SteamContext, WorkshopContentRequest, WorkshopItemDetails, WorkshopItemId,
+        WorkshopItemRef, WorkshopSearchRequest,
     },
 };
 
@@ -152,6 +152,8 @@ impl Yoita {
                 entry.name
             )
         })?;
+
+        // 尝试获取workshop_id, 用户直接提供/用户提供mod名+搜索
         let workshop_id = match id.parse::<WorkshopItemId>() {
             Ok(id) => id,
             Err(_) => self
@@ -534,7 +536,10 @@ mod tests {
         let resolved = app.resolve_mod(&mod_config).await.unwrap();
 
         assert_eq!(resolved.source_path, root);
-        assert_eq!(*metadata.seen_query.lock().unwrap(), Some("wanddbg".to_owned()));
+        assert_eq!(
+            *metadata.seen_query.lock().unwrap(),
+            Some("wanddbg".to_owned())
+        );
 
         std::fs::remove_dir_all(resolved.source_path).unwrap();
     }
@@ -581,7 +586,8 @@ mod tests {
         fn fetch_item<'a>(
             &'a self,
             _request: WorkshopMetadataRequest,
-        ) -> crate::steam::SteamFuture<'a, crate::error::Result<Option<WorkshopItemDetails>>> {
+        ) -> crate::steam::SteamFuture<'a, crate::error::Result<Option<WorkshopItemDetails>>>
+        {
             Box::pin(async { Ok(None) })
         }
 
