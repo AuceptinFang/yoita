@@ -18,7 +18,6 @@ fn loads_example_config_from_tests_fixture() {
     let config = toml::load_config(fixture_path("yoita.example.toml")).unwrap();
 
     assert_eq!(config.config.cache_dir, PathBuf::from(".yoita/cache"));
-    assert_eq!(config.config.staging_dir, PathBuf::from(".yoita/staging"));
     assert_eq!(config.config.mount_dir, PathBuf::from("./mods"));
 
     let steam = config.steam.as_ref().unwrap();

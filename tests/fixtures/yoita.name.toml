@@ -1,10 +1,8 @@
 [config]
 cache_dir = "tests/.artifacts/cache"
-staging_dir = "tests/.artifacts/staging"
 mount_dir = "tests/.artifacts/mods"
 
 [steam]
-backend = "steamcmd"
 steamcmd_path = "steamcmd"
 force_install_dir = "tests/.artifacts/steamcmd"
 app_id = 881100
@@ -13,4 +11,3 @@ login = "anonymous"
 
 [mods]
 wanddbg = {}
-

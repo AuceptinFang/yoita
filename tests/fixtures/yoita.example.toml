@@ -1,11 +1,9 @@
 # 支持目录配置，用 id 或字符串简写定位 Steam 工坊项
 [config]
 cache_dir = ".yoita/cache"
-staging_dir = ".yoita/staging"
 mount_dir = "./mods"
 
 [steam]
-backend = "steamcmd"
 steamcmd_path = "steamcmd"
 force_install_dir = ".yoita/steamcmd"
 app_id = 881100

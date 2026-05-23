@@ -356,7 +356,6 @@ mod tests {
     fn custom_archive_path_is_stable() {
         let layout = WorkspaceLayout {
             cache_dir: std::path::PathBuf::from("/tmp/yoita-cache"),
-            staging_dir: std::path::PathBuf::from("/tmp/yoita-staging"),
             mount_dir: std::path::PathBuf::from("/tmp/yoita-mount"),
         };
         let mod_config = ModConfig {
@@ -383,7 +382,6 @@ mod tests {
     fn mount_path_is_stable_for_archive_file() {
         let layout = WorkspaceLayout {
             cache_dir: std::path::PathBuf::from("/tmp/yoita-cache"),
-            staging_dir: std::path::PathBuf::from("/tmp/yoita-staging"),
             mount_dir: std::path::PathBuf::from("/tmp/yoita-mount"),
         };
         let mod_config = ModConfig {
@@ -415,14 +413,12 @@ mod tests {
         let root = std::env::temp_dir().join(format!("yoita-test-{}-{unique}", std::process::id()));
         let layout = WorkspaceLayout {
             cache_dir: root.join("cache"),
-            staging_dir: root.join("staging"),
             mount_dir: root.join("mount"),
         };
 
         layout.prepare().unwrap();
 
         assert!(layout.cache_dir.exists());
-        assert!(layout.staging_dir.exists());
         assert!(layout.mount_dir.exists());
         assert!(layout.state_path().parent().unwrap().exists());
 
@@ -439,7 +435,6 @@ mod tests {
             std::env::temp_dir().join(format!("yoita-prune-{}-{unique}", std::process::id()));
         let layout = WorkspaceLayout {
             cache_dir: root.join("cache"),
-            staging_dir: root.join("staging"),
             mount_dir: root.join("mount"),
         };
         layout.prepare().unwrap();
@@ -510,7 +505,6 @@ mod tests {
             http: Client::builder().build().unwrap(),
             layout: WorkspaceLayout {
                 cache_dir: std::env::temp_dir().join("yoita-name-search-cache"),
-                staging_dir: std::env::temp_dir().join("yoita-name-search-staging"),
                 mount_dir: std::env::temp_dir().join("yoita-name-search-mount"),
             },
             steam: Some(SteamContext::new(
@@ -550,7 +544,6 @@ mod tests {
         let config = YoitaConfig {
             config: Default::default(),
             steam: Some(SteamConfig {
-                backend: crate::config::SteamBackend::SteamCmd,
                 steamcmd_path: "/definitely/missing/steamcmd".into(),
                 working_dir: None,
                 force_install_dir: ".yoita/steamcmd".into(),

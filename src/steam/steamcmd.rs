@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::Context;
 
-use crate::config::{SteamBackend, SteamConfig, SteamLoginConfig};
+use crate::config::{SteamConfig, SteamLoginConfig};
 use crate::error::Result;
 
 use super::{
@@ -188,10 +188,6 @@ impl TryFrom<&SteamConfig> for SteamCmdConfig {
     type Error = anyhow::Error;
 
     fn try_from(config: &SteamConfig) -> std::result::Result<Self, Self::Error> {
-        match config.backend {
-            SteamBackend::SteamCmd => {}
-        }
-
         let login = match config.login {
             SteamLoginConfig::Anonymous => SteamLoginMode::Anonymous,
             SteamLoginConfig::Account => SteamLoginMode::Account {

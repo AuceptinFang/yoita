@@ -14,11 +14,10 @@ pub struct YoitaConfig {
 
 /// 需要用到的三个目录，存储下载文件的，用于挂载（复制）的，目标目录
 #[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RuntimeConfig {
     #[serde(default = "default_cache_dir")]
     pub cache_dir: PathBuf,
-    #[serde(default = "default_staging_dir")]
-    pub staging_dir: PathBuf,
     #[serde(default = "default_mount_dir")]
     pub mount_dir: PathBuf,
 }
@@ -27,16 +26,14 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
             cache_dir: default_cache_dir(),
-            staging_dir: default_staging_dir(),
             mount_dir: default_mount_dir(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SteamConfig {
-    #[serde(default)]
-    pub backend: SteamBackend,
     #[serde(default = "default_steamcmd_path")]
     pub steamcmd_path: PathBuf,
     #[serde(default)]
@@ -53,14 +50,6 @@ pub struct SteamConfig {
     pub username: Option<String>,
     #[serde(default)]
     pub password_env: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum SteamBackend {
-    #[default]
-    #[serde(alias = "steamcmd")]
-    SteamCmd,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
@@ -93,10 +82,6 @@ pub enum ModSource {
 
 fn default_cache_dir() -> PathBuf {
     PathBuf::from(".yoita/cache")
-}
-
-fn default_staging_dir() -> PathBuf {
-    PathBuf::from(".yoita/staging")
 }
 
 fn default_mount_dir() -> PathBuf {

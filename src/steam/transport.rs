@@ -17,15 +17,11 @@ pub enum HttpMethod {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// 一次通用 HTTP 请求。
-///
-/// 约定：
 /// - URL path 直接体现在 `url` 里，不单独拆成“路径参数”字段
 /// - query 参数放在 `query`
 /// - 表单请求体放在 `form`
 /// - 额外请求头放在 `headers`
 pub struct HttpRequest {
-    /// HTTP 方法，例如 `GET` / `POST`。
     pub method: HttpMethod,
     /// 完整 URL。
     ///
@@ -40,13 +36,9 @@ pub struct HttpRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// HTTP 响应的最小抽象。
 pub struct HttpResponse {
-    /// HTTP 状态码。
     pub status: u16,
-    /// 响应头。
     pub headers: BTreeMap<String, String>,
-    /// 原始响应体字节。
     pub body: Vec<u8>,
 }
 
@@ -73,21 +65,16 @@ pub struct CommandRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// 一次外部命令执行结果。
 pub struct CommandOutput {
-    /// 退出码；如果进程被信号终止或平台拿不到退出码，则可能为 `None`。
     pub exit_status: Option<i32>,
-    /// 标准输出。
     pub stdout: String,
-    /// 标准错误输出。
     pub stderr: String,
 }
 
 pub trait HttpRequester: fmt::Debug + Send + Sync {
-    /// 发送一个 HTTP 请求。
     fn send<'a>(&'a self, request: HttpRequest) -> SteamFuture<'a, Result<HttpResponse>>;
 }
 
 pub trait CommandRunner: fmt::Debug + Send + Sync {
-    /// 启动一个外部命令并等待它结束。
     fn run<'a>(&'a self, request: CommandRequest) -> SteamFuture<'a, Result<CommandOutput>>;
 }
 

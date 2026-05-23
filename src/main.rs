@@ -28,7 +28,6 @@ async fn run() -> Result<()> {
         config_path = %config_path,
         state_path = %report.state_path.display(),
         cache_dir = %layout.cache_dir.display(),
-        staging_dir = %layout.staging_dir.display(),
         mount_dir = %layout.mount_dir.display(),
         synced = report.mods.len(),
         removed = report.removed_mounts.len(),

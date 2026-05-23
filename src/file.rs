@@ -14,7 +14,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct WorkspaceLayout {
     pub cache_dir: PathBuf,
-    pub staging_dir: PathBuf,
     pub mount_dir: PathBuf,
 }
 
@@ -22,13 +21,12 @@ impl WorkspaceLayout {
     pub fn from_config(config: &RuntimeConfig) -> Self {
         Self {
             cache_dir: config.cache_dir.clone(),
-            staging_dir: config.staging_dir.clone(),
             mount_dir: config.mount_dir.clone(),
         }
     }
 
     pub fn prepare(&self) -> Result<()> {
-        for dir in [&self.cache_dir, &self.staging_dir, &self.mount_dir] {
+        for dir in [&self.cache_dir, &self.mount_dir] {
             fs::create_dir_all(dir).with_context(|| {
                 format!("failed to create workspace directory `{}`", dir.display())
             })?;

@@ -2,16 +2,10 @@
 # Download cache for custom sources and state data.
 # cache_dir = ".yoita/cache"
 
-# Temporary staging directory used during sync.
-# staging_dir = ".yoita/staging"
-
 # Noita's mods directory. 记得替换！！
 mount_dir = "./mods"
 
 [steam]
-# The only supported backend right now.
-# backend = "steamcmd"
-
 # Windows: put steamcmd.exe next to yoita.exe and yoita.toml.
 steamcmd_path = "./steamcmd.exe"
 

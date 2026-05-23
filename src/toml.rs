@@ -100,7 +100,6 @@ mod tests {
     fn parses_steamcmd_config_defaults() {
         let input = r#"
             [steam]
-            backend = "steamcmd"
 
             [mods]
             edit-always = {}
@@ -123,6 +122,36 @@ mod tests {
             std::path::PathBuf::from(".yoita/steamcmd")
         );
         assert_eq!(steam.login, SteamLoginConfig::Anonymous);
+    }
+
+    #[test]
+    fn rejects_removed_staging_dir_field() {
+        let input = r#"
+            [config]
+            staging_dir = ".yoita/staging"
+
+            [mods]
+            wanddbg = {}
+        "#;
+
+        let error = crate::toml::parse_config(input).unwrap_err();
+        assert!(matches!(error, TomlConfigError::Parse { .. }));
+        assert!(error.to_string().contains("staging_dir"));
+    }
+
+    #[test]
+    fn rejects_removed_steam_backend_field() {
+        let input = r#"
+            [steam]
+            backend = "steamcmd"
+
+            [mods]
+            wanddbg = {}
+        "#;
+
+        let error = crate::toml::parse_config(input).unwrap_err();
+        assert!(matches!(error, TomlConfigError::Parse { .. }));
+        assert!(error.to_string().contains("backend"));
     }
 
     #[test]

@@ -7,7 +7,7 @@
 - Steam 源 mod 的下载
 - Steam Workshop 内容的本地定位
 - `steamcmd` 输出结果的解析
-- 下载结果向 `staging` 和 `mount_dir` 的传递
+- 下载结果向 `mount_dir` 的传递
 
 本文档不覆盖：
 
@@ -22,7 +22,7 @@
 1. 给定 Noita `app_id` 和 Workshop `published_file_id`
 2. 若本地不存在，则主动调用 `steamcmd` 下载
 3. 定位下载结果所在路径
-4. 将结果交给后续 `staging -> mount_dir` 流程
+4. 将结果交给后续 `mount_dir` 同步流程
 
 当前约束：
 
@@ -392,7 +392,6 @@ pub enum SteamCmdDownloadStatus {
 
 ```toml
 [steam]
-backend = "steamcmd"
 steamcmd_path = "/usr/bin/steamcmd"
 force_install_dir = ".yoita/steamcmd"
 app_id = 881100
@@ -404,7 +403,6 @@ login = "anonymous"
 
 ```toml
 [steam]
-backend = "steamcmd"
 steamcmd_path = "/usr/bin/steamcmd"
 force_install_dir = ".yoita/steamcmd"
 app_id = 881100
@@ -453,4 +451,4 @@ wanddbg = { id = "2572385079" }
 
 - `steam` source 的主动下载
 - `state.toml` 中记录本地来源路径
-- 后续 `staging` 与 `mount_dir` 的接入
+- 后续 `mount_dir` 同步流程的接入
