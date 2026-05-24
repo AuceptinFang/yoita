@@ -133,6 +133,7 @@ jobs:
       contents: write
     env:
       RELEASE_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/download-artifact@v4
         with:
